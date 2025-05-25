@@ -33,7 +33,7 @@ Route::get('/registration/{registration}/success', [PublicRegistrationController
 | Authenticated Routes (All Users)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified'])->group(function () {
+
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
@@ -55,14 +55,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     // QR Code downloads - All authenticated users
     Route::get('/registration/{registration}/qr-download', [PublicRegistrationController::class, 'downloadQR'])->name('registration.qr-download');
-});
+
 
 /*
 |--------------------------------------------------------------------------
 | Event Management Routes (Event Managers + Admins)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth',  'event.manager','admin'])->group(function () {
     // Events Management
     Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
     Route::post('/events', [EventController::class, 'store'])->name('events.store');
@@ -77,11 +76,35 @@ Route::middleware(['auth',  'event.manager','admin'])->group(function () {
     Route::resource('registrations', RegistrationController::class);
     Route::get('/events/{event}/tickets', [RegistrationController::class, 'getTickets'])->name('events.tickets');
     
-    // Badge Templates
+    // ===== BADGE TEMPLATES - FIXED ORDER =====
+    // IMPORTANT: Specific routes MUST come BEFORE resource routes!
+    
+    // AJAX route to get tickets by event - MUST BE FIRST
+    Route::get('/badge-templates/get-tickets', [BadgeTemplateController::class, 'getTickets'])
+        ->name('badge-templates.getTickets');
+    
+    // Create or edit template with ticket parameter
+    Route::match(['GET', 'POST'], '/badge-templates/create-or-edit', [BadgeTemplateController::class, 'createOrEdit'])
+        ->name('badge-templates.createOrEdit');
+    
+    // Update content via AJAX
+    Route::post('/badge-templates/content/{contentId}/update', [BadgeTemplateController::class, 'updateContent'])
+        ->name('badge-templates.updateContent');
+    
+    // Save all changes via AJAX
+    Route::post('/badge-templates/save-all-changes', [BadgeTemplateController::class, 'saveAllChanges'])
+        ->name('badge-templates.saveAllChanges');
+    
+    // Preview template - specific route before resource
+    Route::get('/badge-templates/{badgeTemplate}/preview', [BadgeTemplateController::class, 'preview'])
+        ->name('badge-templates.preview');
+    
+    // Badge Printing Routes
+    Route::get('/registrations/{registration}/print-badge', [BadgeTemplateController::class, 'printBadge'])
+        ->name('registrations.printBadge');
+    
+    // Badge Templates Resource Routes - MUST BE LAST
     Route::resource('badge-templates', BadgeTemplateController::class);
-    Route::get('/badge-templates/{badgeTemplate}/preview', [BadgeTemplateController::class, 'preview'])->name('badge-templates.preview');
-    Route::post('/badge-templates/{badgeTemplate}/content', [BadgeTemplateController::class, 'addContent'])->name('badge-templates.add-content');
-    Route::delete('/badge-templates/{badgeTemplate}/content/{badgeContent}', [BadgeTemplateController::class, 'removeContent'])->name('badge-templates.remove-content');
     
     // Registration Fields Management
     Route::get('/events/{event}/registration-fields', [RegistrationFieldController::class, 'index'])->name('registration-fields.index');
@@ -90,20 +113,22 @@ Route::middleware(['auth',  'event.manager','admin'])->group(function () {
     Route::delete('/events/{event}/registration-fields/{registrationField}', [RegistrationFieldController::class, 'destroy'])->name('registration-fields.destroy');
     Route::post('/events/{event}/registration-fields/reorder', [RegistrationFieldController::class, 'reorder'])->name('registration-fields.reorder');
     
+
+
+    
     // Reports
     Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('/reports/events', [ReportController::class, 'events'])->name('reports.events');
     Route::get('/reports/registrations', [ReportController::class, 'registrations'])->name('reports.registrations');
     Route::get('/reports/attendance', [ReportController::class, 'attendance'])->name('reports.attendance');
     Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
-});
 
 /*
 |--------------------------------------------------------------------------
 | Admin Only Routes (Venues, Categories, Users)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth','admin'])->group(function () {
+
     // Venues Management (Admin Only)
     Route::resource('venues', VenueController::class);
     
@@ -112,6 +137,29 @@ Route::middleware(['auth','admin'])->group(function () {
     
     // Users Management (Admin Only)
     Route::resource('users', UserController::class);
-});
 
+
+
+
+    Route::get('/', [RegistrationController::class, 'index'])->name('registrations.index');
+    Route::get('create', [RegistrationController::class, 'create'])->name('registrations.create');
+    Route::post('/', [RegistrationController::class, 'store'])->name('registrations.store');
+    Route::get('{registration}', [RegistrationController::class, 'show'])->name('registrations.show');
+    Route::get('{registration}/edit', [RegistrationController::class, 'edit'])->name('registrations.edit');
+    Route::put('{registration}', [RegistrationController::class, 'update'])->name('registrations.update');
+    Route::delete('{registration_id}', [RegistrationController::class, 'destroy'])->name('registrations.destroy');
+    Route::get('tickets/{event_id}', [RegistrationController::class, 'getTickets'])->name('registrations.tickets');
+    Route::get('fields/{event_id}', [RegistrationController::class, 'getRegistrationFields'])->name('registrations.fields');
+    Route::get('export', [RegistrationController::class, 'export'])->name('registrations.export');
+    Route::post('import', [RegistrationController::class, 'import'])->name('registrations.import');
+    Route::get('{registration}/qr-code', [RegistrationController::class, 'downloadQrCode'])->name('registrations.download_qr_code');
+    Route::get('{registration}/badge', [RegistrationController::class, 'getBadge'])->name('registrations.get_badge');
+    Route::get('{registration}/badge-download', [RegistrationController::class, 'downloadBadge'])->name('registrations.download_badge');
+    Route::post('/events/{event}/registration-fields/import', [RegistrationFieldController::class, 'import'])
+        ->name('registration-fields.import');
+    Route::post('registrations/bulk-action', [RegistrationController::class, 'bulkAction'])
+    ->name('registrations.bulk-action');
+
+// User Authentication Routes
+             
 require __DIR__.'/auth.php';

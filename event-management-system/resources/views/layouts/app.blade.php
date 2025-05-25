@@ -49,6 +49,11 @@
                         <i class="fas fa-ticket-alt mr-3"></i>
                         Tickets
                     </a>
+                      <a href="{{ route('badge-templates.index') }}" class="flex items-center px-4 py-2 text-white rounded-lg {{ request()->routeIs('badge-templates.*') ? 'bg-blue-700' : '' }} hover:bg-blue-700">
+                        <i class="fas fa-id-badge mr-3"></i>
+                        Badge Templates
+                    </a>
+        
                     <a href="{{ route('registrations.index') }}" class="flex items-center px-4 py-2 text-white rounded-lg {{ request()->routeIs('registrations.*') ? 'bg-blue-700' : '' }} hover:bg-blue-700">
                         <i class="fas fa-user-plus mr-3"></i>
                         Registrations

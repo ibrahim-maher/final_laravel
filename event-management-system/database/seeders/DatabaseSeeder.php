@@ -2,93 +2,56 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\User;
-use App\Models\Venue;
-use App\Models\Category;
-use App\Models\Event;
-use App\Models\Ticket;
+use Illuminate\Database\Seeder;
+use Illuminate\Database\Eloquent\Model;               // ← import Model
+use Illuminate\Database\Eloquent\Factories\Factory as EloquentFactory;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
     public function run()
     {
-        // Create Admin User
-        User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'password' => bcrypt('password'),
-            'role' => 'ADMIN',
-           
-        ]);
+        // Disable *all* model events during seeding
+        Model::withoutEvents(function () {
+            // 1) discover all models:
+            $models = collect(File::files(app_path('Models')))
+                ->map(fn($file) => 'App\\Models\\' . Str::replaceLast('.php', '', $file->getFilename()));
 
-        // Create Event Manager
-        User::create([
-            'name' => 'Event Manager',
-            'email' => 'manager@example.com',
-            'password' => bcrypt('password'),
-            'role' => 'EVENT_MANAGER',
-         
-        ]);
+            // 2) seed each (skip User, we do that manually)
+            $models->each(function (string $model) {
+                if ($model === User::class) {
+                    $this->command->info("Skipped User model (admin below).");
+                    return;
+                }
 
-        // Create Usher
-        User::create([
-            'name' => 'Usher User',
-            'email' => 'usher@example.com',
-            'password' => bcrypt('password'),
-            'role' => 'USHER',
-         
-        ]);
+                $factoryClass = "Database\\Factories\\" . class_basename($model) . "Factory";
+                if (! class_exists($factoryClass)) {
+                    $this->command->info("Seeder skipped {$model}: no factory found.");
+                    return;
+                }
 
-        // Create sample venues
-        $venues = [
-            ['name' => 'Grand Convention Center', 'address' => '123 Main St, City', 'capacity' => 1000],
-            ['name' => 'Community Hall', 'address' => '456 Oak Ave, Town', 'capacity' => 500],
-            ['name' => 'Outdoor Amphitheater', 'address' => '789 Park Rd, City', 'capacity' => 2000],
-        ];
+                try {
+                    EloquentFactory::factoryForModel($model)
+                        ->count(150)
+                        ->create();
+                    $this->command->info("Seeded 150 × " . class_basename($model));
+                } catch (\Throwable $e) {
+                    $this->command->error("Error on {$model}: " . $e->getMessage());
+                }
+            });
+        });
 
-        foreach ($venues as $venue) {
-            Venue::create($venue);
-        }
-
-        // Create sample categories
-        $categories = [
-            ['name' => 'Conference'],
-            ['name' => 'Workshop'],
-            ['name' => 'Concert'],
-            ['name' => 'Seminar'],
-        ];
-
-        foreach ($categories as $category) {
-            Category::create($category);
-        }
-
-        // Create sample events
-        $event = Event::create([
-            'name' => 'Tech Conference 2024',
-            'description' => 'Annual technology conference featuring latest trends and innovations.',
-            'start_date' => now()->addDays(30),
-            'end_date' => now()->addDays(31),
-            'venue_id' => 1,
-            'category_id' => 1,
-            'is_active' => true,
-        ]);
-
-        // Create sample tickets
-        Ticket::create([
-            'event_id' => $event->id,
-            'created_by' => 1,
-            'name' => 'General Admission',
-            'price' => 99.99,
-            'capacity' => 800,
-        ]);
-
-        Ticket::create([
-            'event_id' => $event->id,
-            'created_by' => 1,
-            'name' => 'VIP Access',
-            'price' => 199.99,
-            'capacity' => 100,
-        ]);
+        // 3) ensure Admin user (events OK here)
+        User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name'     => 'Admin User',
+                'password' => bcrypt('password'),
+                'role'     => 'ADMIN',
+            ]
+        );
+        $this->command->info("Ensured Admin user exists.");
     }
 }

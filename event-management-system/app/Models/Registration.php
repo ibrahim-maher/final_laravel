@@ -10,13 +10,25 @@ class Registration extends Model
     use HasFactory;
 
     protected $fillable = [
-        'event_id', 'user_id', 'ticket_type_id', 'registration_data'
+        'event_id', 'user_id', 'ticket_type_id', 'registration_data', 'status'
     ];
 
     protected $casts = [
         'registration_data' => 'array',
+        'registered_at' => 'datetime',
     ];
 
+    const STATUS_PENDING = 'pending';
+    const STATUS_CONFIRMED = 'confirmed';
+    const STATUS_CANCELLED = 'cancelled';
+
+    const STATUSES = [
+        self::STATUS_PENDING => 'Pending',
+        self::STATUS_CONFIRMED => 'Confirmed', 
+        self::STATUS_CANCELLED => 'Cancelled',
+    ];
+
+    // Relationships
     public function event()
     {
         return $this->belongsTo(Event::class);
@@ -39,17 +51,83 @@ class Registration extends Model
 
     public function visitorLogs()
     {
-        return $this->hasMany(VisitorLog::class)->orderBy('created_at', 'desc');
+        return $this->hasMany(VisitorLog::class);
     }
 
-    public function getLastActionAttribute()
+    // Accessors
+    public function getStatusDisplayAttribute()
     {
-        $lastLog = $this->visitorLogs()->first();
-        return $lastLog ? $lastLog->action : null;
+        return self::STATUSES[$this->status] ?? $this->status;
     }
 
-    public function getIsCheckedInAttribute()
+    public function getRegistrationDataAttribute($value)
     {
-        return $this->last_action === 'checkin';
+        return $value ? json_decode($value, true) : [];
+    }
+
+    public function setRegistrationDataAttribute($value)
+    {
+        $this->attributes['registration_data'] = json_encode($value);
+    }
+
+    // Scopes
+    public function scopeForEvent($query, $eventId)
+    {
+        return $query->where('event_id', $eventId);
+    }
+
+    public function scopeConfirmed($query)
+    {
+        return $query->where('status', self::STATUS_CONFIRMED);
+    }
+
+    public function scopePending($query)
+    {
+        return $query->where('status', self::STATUS_PENDING);
+    }
+
+    public function scopeSearch($query, $search)
+    {
+        return $query->whereHas('user', function($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%")
+              ->orWhere('phone', 'like', "%{$search}%");
+        })->orWhereHas('event', function($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%");
+        });
+    }
+
+    // Methods
+    public function getRegistrationFieldValue($fieldName)
+    {
+        $data = $this->registration_data;
+        return $data[$fieldName] ?? null;
+    }
+
+    public function setRegistrationFieldValue($fieldName, $value)
+    {
+        $data = $this->registration_data;
+        $data[$fieldName] = $value;
+        $this->registration_data = $data;
+    }
+
+    public function generateQRCode()
+    {
+        if (!$this->qrCode) {
+            QRCode::create([
+                'registration_id' => $this->id,
+                'ticket_type_id' => $this->ticket_type_id,
+            ]);
+        }
+    }
+
+    public static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($registration) {
+            // Auto-generate QR code when registration is created
+            $registration->generateQRCode();
+        });
     }
 }

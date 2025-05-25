@@ -65,9 +65,7 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex space-x-2">
-                            <a href="{{ route('tickets.show', $ticket) }}" class="text-blue-600 hover:text-blue-900">
-                                <i class="fas fa-eye"></i>
-                            </a>
+                           
                             <a href="{{ route('tickets.edit', $ticket) }}" class="text-yellow-600 hover:text-yellow-900">
                                 <i class="fas fa-edit"></i>
                             </a>
