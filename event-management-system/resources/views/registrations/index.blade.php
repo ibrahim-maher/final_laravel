@@ -3,7 +3,7 @@
 @section('title', 'Registrations')
 
 @section('content')
-<div class=" mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- CSRF Token for JavaScript -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
@@ -251,6 +251,7 @@
                                    data-event-name="{{ $registration->event->name ?? 'N/A' }}"
                                    data-event-date="{{ $registration->event->start_date ? $registration->event->start_date->format('M d, Y') : 'TBD' }}"
                                    data-ticket-type="{{ $registration->ticketType->name ?? 'N/A' }}"
+                                   data-ticket-id="{{ $registration->ticket_type_id }}"
                                    data-status="{{ $registration->status }}">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -289,7 +290,7 @@
                             </div>
                             @if($registration->ticketType)
                             <div class="text-sm font-semibold text-green-600">
-                                ${{ $registration->ticketType->price }}
+                                ${{ number_format($registration->ticketType->price, 2) }}
                             </div>
                             @endif
                         </td>
@@ -375,13 +376,6 @@
             </a>
         </div>
         @endif
-    </div>
-</div>
-
-<!-- Print Badge Template (Hidden) -->
-<div id="badge-template" class="hidden">
-    <div class="badge-container">
-        <!-- Badge content will be inserted here -->
     </div>
 </div>
 
@@ -542,16 +536,28 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkbox = document.querySelector(`[data-registration-id="${registrationId}"]`);
         if (!checkbox) return;
 
-        const badgeData = {
-            participantName: checkbox.getAttribute('data-participant-name'),
-            eventName: checkbox.getAttribute('data-event-name'),
-            eventDate: checkbox.getAttribute('data-event-date'),
-            ticketType: checkbox.getAttribute('data-ticket-type'),
-            status: checkbox.getAttribute('data-status'),
-            registrationId: registrationId
-        };
-
-        printBadges([badgeData]);
+        const ticketId = checkbox.getAttribute('data-ticket-id');
+        
+        // Check if badge template exists for this ticket
+        fetch(`/api/badge-template/check/${ticketId}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': getCSRFToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.hasTemplate) {
+                // Open print window for badge
+                window.open(`/registrations/${registrationId}/print-badge`, '_blank');
+            } else {
+                alert('No badge template configured for this ticket type. Please create a badge template first.');
+            }
+        })
+        .catch(error => {
+            console.error('Error checking badge template:', error);
+            alert('Error checking badge template. Please try again.');
+        });
     };
 
     // Bulk print badges
@@ -563,205 +569,34 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const badgesData = Array.from(checkedBoxes).map(checkbox => ({
-            participantName: checkbox.getAttribute('data-participant-name'),
-            eventName: checkbox.getAttribute('data-event-name'),
-            eventDate: checkbox.getAttribute('data-event-date'),
-            ticketType: checkbox.getAttribute('data-ticket-type'),
-            status: checkbox.getAttribute('data-status'),
-            registrationId: checkbox.getAttribute('data-registration-id')
-        }));
-
-        printBadges(badgesData);
+        const registrationIds = Array.from(checkedBoxes).map(cb => cb.getAttribute('data-registration-id'));
+        
+        // Create form to submit multiple registration IDs
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/registrations/bulk-print-badges';
+        form.target = '_blank';
+        
+        // Add CSRF token
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = '_token';
+        tokenInput.value = getCSRFToken();
+        form.appendChild(tokenInput);
+        
+        // Add registration IDs
+        registrationIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'registration_ids[]';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
     };
-
-    // Print badges function
-    function printBadges(badgesData) {
-        const printWindow = window.open('', '_blank');
-        const badgesHtml = badgesData.map(badge => createBadgeHtml(badge)).join('\n');
-        
-        const printContent = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Event Registration Badges</title>
-                <style>
-                    @page {
-                        margin: 0.5in;
-                        size: letter;
-                    }
-                    body {
-                        font-family: 'Arial', sans-serif;
-                        margin: 0;
-                        padding: 20px;
-                        background: #f5f5f5;
-                    }
-                    .badges-container {
-                        display: flex;
-                        flex-wrap: wrap;
-                        gap: 20px;
-                        justify-content: center;
-                    }
-                    .badge {
-                        width: 350px;
-                        height: 250px;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        border-radius: 20px;
-                        position: relative;
-                        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                        overflow: hidden;
-                        break-inside: avoid;
-                        page-break-inside: avoid;
-                    }
-                    .badge::before {
-                        content: '';
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
-                        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="white" opacity="0.1"/><circle cx="80" cy="80" r="1" fill="white" opacity="0.1"/><circle cx="40" cy="60" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-                    }
-                    .badge-header {
-                        background: rgba(255,255,255,0.15);
-                        backdrop-filter: blur(10px);
-                        padding: 15px 20px;
-                        color: white;
-                        position: relative;
-                        z-index: 2;
-                    }
-                    .badge-title {
-                        font-size: 14px;
-                        font-weight: bold;
-                        text-transform: uppercase;
-                        letter-spacing: 1px;
-                        margin: 0;
-                        text-align: center;
-                    }
-                    .badge-content {
-                        padding: 20px;
-                        color: white;
-                        position: relative;
-                        z-index: 2;
-                        height: calc(100% - 60px);
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                    }
-                    .participant-name {
-                        font-size: 22px;
-                        font-weight: bold;
-                        text-align: center;
-                        margin-bottom: 15px;
-                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-                    }
-                    .event-details {
-                        text-align: center;
-                        margin-bottom: 15px;
-                    }
-                    .event-name {
-                        font-size: 16px;
-                        font-weight: 600;
-                        margin-bottom: 5px;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-                    }
-                    .event-date {
-                        font-size: 14px;
-                        opacity: 0.9;
-                    }
-                    .badge-footer {
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        font-size: 12px;
-                        margin-top: auto;
-                    }
-                    .ticket-type {
-                        background: rgba(255,255,255,0.2);
-                        padding: 5px 10px;
-                        border-radius: 15px;
-                        font-weight: 600;
-                    }
-                    .registration-id {
-                        opacity: 0.8;
-                        font-family: monospace;
-                    }
-                    .status-badge {
-                        position: absolute;
-                        top: 15px;
-                        right: 15px;
-                        padding: 5px 10px;
-                        border-radius: 12px;
-                        font-size: 10px;
-                        font-weight: bold;
-                        text-transform: uppercase;
-                        z-index: 3;
-                    }
-                    .status-confirmed {
-                        background: rgba(34, 197, 94, 0.9);
-                        color: white;
-                    }
-                    .status-pending {
-                        background: rgba(251, 191, 36, 0.9);
-                        color: white;
-                    }
-                    .status-cancelled {
-                        background: rgba(239, 68, 68, 0.9);
-                        color: white;
-                    }
-                    @media print {
-                        body {
-                            background: white;
-                        }
-                        .badge {
-                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="badges-container">
-                    ${badgesHtml}
-                </div>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                            window.close();
-                        }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `;
-        
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-    }
-
-    function createBadgeHtml(badge) {
-        return `
-            <div class="badge">
-                <div class="status-badge status-${badge.status}">
-                    ${badge.status}
-                </div>
-                <div class="badge-header">
-                    <h3 class="badge-title">Event Registration</h3>
-                </div>
-                <div class="badge-content">
-                    <div class="participant-name">${badge.participantName}</div>
-                    <div class="event-details">
-                        <div class="event-name">${badge.eventName}</div>
-                        <div class="event-date">${badge.eventDate}</div>
-                    </div>
-                    <div class="badge-footer">
-                        <div class="ticket-type">${badge.ticketType}</div>
-                        <div class="registration-id">#${badge.registrationId}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
 });
 </script>
 @endpush

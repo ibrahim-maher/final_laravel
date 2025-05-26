@@ -544,18 +544,25 @@ function clearResults() {
     document.getElementById('search-results').classList.add('hidden');
 }
 
-// Action Functions
+
+
 function printBadge(registrationId) {
-    window.open(`{{ route('registrations.badge', '') }}/${registrationId}`, '_blank');
+    // Use URL helper to construct the route properly
+    const url = "{{ url('registrations') }}/" + registrationId + "/badge";
+    window.open(url, '_blank');
 }
 
 function viewFullDetails(registrationId) {
-    window.open(`{{ route('registrations.show', '') }}/${registrationId}`, '_blank');
+    // Use URL helper to construct the route properly
+    const url = "{{ url('registrations') }}/" + registrationId;
+    window.open(url, '_blank');
 }
 
 function checkInOut(registrationId) {
-    window.location.href = `{{ route('checkin.index') }}?registration_id=${registrationId}`;
+    window.location.href = "{{ route('checkin.index') }}?registration_id=" + registrationId;
 }
+
+
 
 // Recent Lookups Management
 function addToRecentLookups(registration, method) {

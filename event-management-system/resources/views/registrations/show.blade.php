@@ -286,21 +286,7 @@
                         </form>
                         @endif
                         
-                        @if($registration->status !== 'cancelled')
-                        <form action="{{ route('registrations.update', $registration) }}" method="POST">
-                            @csrf
-                            @method('PUT')
-                            <input type="hidden" name="status" value="cancelled">
-                            <input type="hidden" name="event_id" value="{{ $registration->event_id }}">
-                            <input type="hidden" name="user_id" value="{{ $registration->user_id }}">
-                            <input type="hidden" name="ticket_type_id" value="{{ $registration->ticket_type_id }}">
-                            <button type="submit" 
-                                    class="w-full px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors"
-                                    onclick="return confirm('Are you sure you want to cancel this registration?')">
-                                Cancel Registration
-                            </button>
-                        </form>
-                        @endif
+                      
                         
                         <a href="mailto:{{ $registration->user->email ?? '' }}" 
                            class="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
