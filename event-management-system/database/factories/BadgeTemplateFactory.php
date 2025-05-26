@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+
 class BadgeTemplateFactory extends Factory
 {
     protected $model = BadgeTemplate::class;
@@ -22,6 +23,7 @@ class BadgeTemplateFactory extends Factory
             'background_image' => null, // or ->image('templates', 400, 300)
             'created_by'       => User::factory(),
             'default_font'     => $this->faker->randomElement(array_keys(BadgeTemplate::FONT_CHOICES)),
+            'created_by' => User::factory(),
         ];
     }
 }

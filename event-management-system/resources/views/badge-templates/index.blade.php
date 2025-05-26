@@ -8,7 +8,7 @@
     <!-- Header -->
     <div class="flex justify-between items-center">
         <div>
-            <h2 class="text-2xl font-bold text-gray-900">Badge Templates</h2>
+            <h2 class="text-2xl font-bold text-gray-900">All Badge Templates</h2>
             <p class="text-gray-600">Create and manage event badge templates</p>
         </div>
         <a href="{{ route('badge-templates.create') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">

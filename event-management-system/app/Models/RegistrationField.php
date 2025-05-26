@@ -4,13 +4,19 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RegistrationField extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'event_id', 'field_name', 'field_type', 'is_required', 'options', 'order'
+        'event_id',
+        'field_name',
+        'field_type',
+        'is_required',
+        'options',
+        'order',
     ];
 
     protected $casts = [
@@ -18,74 +24,79 @@ class RegistrationField extends Model
         'order' => 'integer',
     ];
 
+    // Field types constant
     const FIELD_TYPES = [
         'text' => 'Text',
+        'textarea' => 'Textarea',
         'email' => 'Email',
         'number' => 'Number',
-        'dropdown' => 'Dropdown',
-        'checkbox' => 'Checkbox',
-        'textarea' => 'Textarea',
-        'date' => 'Date',
         'phone' => 'Phone',
+        'dropdown' => 'Dropdown',
+        'radio' => 'Radio',
+        'checkbox' => 'Checkbox',
+        'date' => 'Date',
+        'time' => 'Time',
+        'url' => 'URL',
     ];
 
-    const DEFAULT_FIELDS = [
-        ['field_name' => 'First Name', 'field_type' => 'text', 'is_required' => true],
-        ['field_name' => 'Last Name', 'field_type' => 'text', 'is_required' => true],
-        ['field_name' => 'Email', 'field_type' => 'email', 'is_required' => true],
-        ['field_name' => 'Phone Number', 'field_type' => 'phone', 'is_required' => true],
-        ['field_name' => 'Title', 'field_type' => 'text', 'is_required' => true],
-        ['field_name' => 'Company Name', 'field_type' => 'text', 'is_required' => false],
-    ];
-
-    // Relationships
-    public function event()
+    /**
+     * Relationship with Event
+     */
+    public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
     }
 
-    // Accessors
-    public function getOptionsArrayAttribute()
-    {
-        return $this->options ? explode(',', $this->options) : [];
-    }
-
-    public function getFieldTypeDisplayAttribute()
-    {
-        return self::FIELD_TYPES[$this->field_type] ?? $this->field_type;
-    }
-
-    // Scopes
+    /**
+     * Scope for ordered fields
+     */
     public function scopeOrdered($query)
     {
         return $query->orderBy('order');
     }
 
-    public function scopeRequired($query)
+    /**
+     * Get field type display name
+     */
+    public function getFieldTypeDisplayAttribute()
     {
-        return $query->where('is_required', true);
+        return self::FIELD_TYPES[$this->field_type] ?? $this->field_type;
     }
 
-    public function scopeForEvent($query, $eventId)
+    /**
+     * Get options as array
+     */
+    public function getOptionsArrayAttribute()
     {
-        return $query->where('event_id', $eventId);
+        if (empty($this->options)) {
+            return [];
+        }
+        
+        return array_map('trim', explode(',', $this->options));
     }
 
-    // Methods
-    public static function createDefaultFields($eventId)
+    /**
+     * Set options from array
+     */
+    public function setOptionsArrayAttribute($value)
     {
-        foreach (self::DEFAULT_FIELDS as $index => $field) {
-            self::create([
-                'event_id' => $eventId,
-                'field_name' => $field['field_name'],
-                'field_type' => $field['field_type'],
-                'is_required' => $field['is_required'],
-                'order' => $index + 1,
-            ]);
+        if (is_array($value)) {
+            $this->attributes['options'] = implode(',', array_filter($value));
         }
     }
 
-    public function generateValidationRules()
+    /**
+     * Check if field has options
+     */
+    public function hasOptions()
+    {
+        return in_array($this->field_type, ['dropdown', 'radio', 'checkbox']) && !empty($this->options);
+    }
+
+    /**
+     * Get validation rules for this field
+     */
+    public function getValidationRules()
     {
         $rules = [];
         
@@ -104,27 +115,79 @@ class RegistrationField extends Model
                 break;
             case 'phone':
                 $rules[] = 'string';
-                $rules[] = 'max:20';
+                break;
+            case 'url':
+                $rules[] = 'url';
                 break;
             case 'date':
                 $rules[] = 'date';
                 break;
-            case 'text':
-            case 'textarea':
-                $rules[] = 'string';
-                $rules[] = 'max:255';
+            case 'time':
+                $rules[] = 'date_format:H:i';
                 break;
             case 'dropdown':
-                if ($this->options) {
-                    $options = $this->options_array;
-                    $rules[] = 'in:' . implode(',', $options);
+            case 'radio':
+                if ($this->hasOptions()) {
+                    $rules[] = 'in:' . implode(',', $this->options_array);
                 }
                 break;
             case 'checkbox':
-                $rules[] = 'boolean';
+                $rules[] = 'array';
+                if ($this->hasOptions()) {
+                    $rules[] = 'in:' . implode(',', $this->options_array);
+                }
+                break;
+            default:
+                $rules[] = 'string';
                 break;
         }
 
         return implode('|', $rules);
+    }
+
+    /**
+     * Get HTML input type for this field
+     */
+    public function getHtmlInputType()
+    {
+        switch ($this->field_type) {
+            case 'email':
+                return 'email';
+            case 'number':
+                return 'number';
+            case 'phone':
+                return 'tel';
+            case 'url':
+                return 'url';
+            case 'date':
+                return 'date';
+            case 'time':
+                return 'time';
+            case 'textarea':
+                return 'textarea';
+            case 'dropdown':
+                return 'select';
+            case 'radio':
+                return 'radio';
+            case 'checkbox':
+                return 'checkbox';
+            default:
+                return 'text';
+        }
+    }
+
+    /**
+     * Boot method for model events
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Auto-set order when creating
+        static::creating(function ($model) {
+            if (empty($model->order)) {
+                $model->order = static::where('event_id', $model->event_id)->max('order') + 1;
+            }
+        });
     }
 }

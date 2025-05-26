@@ -8,7 +8,7 @@
     <!-- Header -->
     <div class="flex justify-between items-center">
         <div>
-            <h2 class="text-2xl font-bold text-gray-900">Tickets</h2>
+            <h2 class="text-2xl font-bold text-gray-900">All Tickets</h2>
             <p class="text-gray-600">Manage ticket types for events</p>
         </div>
         <a href="{{ route('tickets.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center">

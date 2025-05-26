@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Ticket;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+
 class RegistrationFactory extends Factory
 {
     protected $model = Registration::class;

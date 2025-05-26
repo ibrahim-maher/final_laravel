@@ -7,6 +7,9 @@ use App\Models\Event;
 use App\Models\Venue;
 use App\Models\Category;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Models\User;  // add this
+
+
 
 class EventFactory extends Factory
 {

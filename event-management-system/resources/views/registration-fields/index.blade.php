@@ -5,6 +5,9 @@
 
 @section('content')
 <div class="container mx-auto px-6 py-8">
+    <!-- CSRF Token for JavaScript -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
     <!-- Header -->
     <div class="mb-8">
         <nav class="flex mb-4" aria-label="Breadcrumb">
@@ -102,6 +105,7 @@
                         <label class="flex items-center">
                             <input type="checkbox" 
                                    name="is_required" 
+                                   value="1"
                                    class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                             <span class="ml-2 text-sm text-gray-700">Required field</span>
                         </label>
@@ -302,6 +306,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeBulkActions();
 });
 
+// Get CSRF token
+function getCSRFToken() {
+    return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+}
+
 // Initialize sortable functionality
 function initializeSortable() {
     const sortableContainer = document.getElementById('sortable-fields');
@@ -326,16 +335,22 @@ function updateFieldOrder(fieldIds) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            'X-CSRF-TOKEN': getCSRFToken(),
+            'Accept': 'application/json'
         },
         body: JSON.stringify({
             field_ids: fieldIds
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (!data.success) {
-            alert('Error updating field order');
+            alert('Error updating field order: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
@@ -383,24 +398,38 @@ function initializeBulkActions() {
 
     function updateBulkActionButtons() {
         const checkedBoxes = document.querySelectorAll('.field-checkbox:checked');
-        bulkDeleteBtn.disabled = checkedBoxes.length === 0;
+        if(bulkDeleteBtn) {
+            bulkDeleteBtn.disabled = checkedBoxes.length === 0;
+        }
     }
 }
 
 // Edit field function
 function editField(fieldId) {
-    fetch(`{{ route('registration-fields.index', $event) }}/${fieldId}/edit`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                populateEditForm(data.field, data.fieldTypes);
-                document.getElementById('editModal').classList.remove('hidden');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error loading field data');
-        });
+    fetch(`/events/{{ $event->id }}/registration-fields/${fieldId}/edit`, {
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': getCSRFToken()
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            populateEditForm(data.field, data.fieldTypes);
+            document.getElementById('editModal').classList.remove('hidden');
+        } else {
+            alert('Error loading field data: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error loading field data');
+    });
 }
 
 // Populate edit form
@@ -408,7 +437,7 @@ function populateEditForm(field, fieldTypes) {
     const formContent = document.getElementById('editFormContent');
     const editForm = document.getElementById('editFieldForm');
     
-    editForm.action = `{{ route('registration-fields.index', $event) }}/${field.id}`;
+    editForm.action = `/events/{{ $event->id }}/registration-fields/${field.id}`;
     
     let optionsHtml = '';
     if (field.field_type === 'dropdown') {
@@ -445,7 +474,8 @@ function populateEditForm(field, fieldTypes) {
         
         <div class="mb-4">
             <label class="flex items-center">
-                <input type="checkbox" name="is_required" ${field.is_required ? 'checked' : ''}
+                <input type="hidden" name="is_required" value="0">
+                <input type="checkbox" name="is_required" value="1" ${field.is_required ? 'checked' : ''}
                        class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                 <span class="ml-2 text-sm text-gray-700">Required field</span>
             </label>
@@ -471,18 +501,24 @@ function closeEditModal() {
 // Duplicate field function
 function duplicateField(fieldId) {
     if (confirm('Are you sure you want to duplicate this field?')) {
-        fetch(`{{ route('registration-fields.index', $event) }}/${fieldId}/duplicate`, {
+        fetch(`/events/{{ $event->id }}/registration-fields/${fieldId}/duplicate`, {
             method: 'POST',
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                'X-CSRF-TOKEN': getCSRFToken(),
+                'Accept': 'application/json'
             }
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 location.reload();
             } else {
-                alert('Error duplicating field');
+                alert('Error duplicating field: ' + (data.message || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -512,18 +548,24 @@ function deleteSelectedFields() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                'X-CSRF-TOKEN': getCSRFToken(),
+                'Accept': 'application/json'
             },
             body: JSON.stringify({
                 field_ids: fieldIds
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 location.reload();
             } else {
-                alert('Error deleting fields');
+                alert('Error deleting fields: ' + (data.message || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -543,15 +585,22 @@ document.getElementById('editFieldForm').addEventListener('submit', function(e) 
         method: 'POST',
         body: formData,
         headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            'X-CSRF-TOKEN': getCSRFToken(),
+            'Accept': 'application/json'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
+            closeEditModal();
             location.reload();
         } else {
-            alert('Error updating field');
+            alert('Error updating field: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {

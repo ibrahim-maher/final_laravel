@@ -7,12 +7,12 @@ use App\Models\Event;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;  // ← add
-
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Log;
 
 class RegistrationFieldController extends Controller
 {   
-        use AuthorizesRequests; // ← add
+    use AuthorizesRequests;
 
     public function index(Event $event)
     {
@@ -37,19 +37,21 @@ class RegistrationFieldController extends Controller
         $validated = $request->validate([
             'field_name' => 'required|string|max:50',
             'field_type' => 'required|in:' . implode(',', array_keys(RegistrationField::FIELD_TYPES)),
-            'is_required' => 'boolean',
+            'is_required' => 'nullable|boolean',
             'options' => 'nullable|string',
         ]);
 
         $validated['event_id'] = $event->id;
-        $validated['is_required'] = $request->has('is_required');
+        $validated['is_required'] = $request->has('is_required') && $request->input('is_required') == '1';
         $validated['order'] = $event->registrationFields()->max('order') + 1;
 
         // Clean up options for dropdown fields
-        if ($validated['field_type'] === 'dropdown' && $validated['options']) {
+        if ($validated['field_type'] === 'dropdown' && !empty($validated['options'])) {
             $options = array_map('trim', explode(',', $validated['options']));
             $options = array_filter($options); // Remove empty options
             $validated['options'] = implode(',', $options);
+        } else {
+            $validated['options'] = null;
         }
 
         $field = RegistrationField::create($validated);
@@ -95,18 +97,19 @@ class RegistrationFieldController extends Controller
         $validated = $request->validate([
             'field_name' => 'required|string|max:50',
             'field_type' => 'required|in:' . implode(',', array_keys(RegistrationField::FIELD_TYPES)),
-            'is_required' => 'boolean',
+            'is_required' => 'nullable',
             'options' => 'nullable|string',
         ]);
 
-        $validated['is_required'] = $request->has('is_required');
+        // Handle the checkbox properly
+        $validated['is_required'] = $request->has('is_required') && $request->input('is_required') == '1';
 
         // Clean up options for dropdown fields
-        if ($validated['field_type'] === 'dropdown' && $validated['options']) {
+        if ($validated['field_type'] === 'dropdown' && !empty($validated['options'])) {
             $options = array_map('trim', explode(',', $validated['options']));
             $options = array_filter($options); // Remove empty options
             $validated['options'] = implode(',', $options);
-        } elseif ($validated['field_type'] !== 'dropdown') {
+        } else {
             $validated['options'] = null;
         }
 
@@ -143,74 +146,142 @@ class RegistrationFieldController extends Controller
 
     public function reorder(Request $request, Event $event): JsonResponse
     {
-        $this->authorize('update', RegistrationField::class);
+        try {
+            // Check if user can update registration fields for this event
+            $this->authorize('create', RegistrationField::class);
 
-        $request->validate([
-            'field_ids' => 'required|array',
-            'field_ids.*' => 'exists:registration_fields,id'
-        ]);
+            $validated = $request->validate([
+                'field_ids' => 'required|array',
+                'field_ids.*' => 'exists:registration_fields,id'
+            ]);
 
-        $fieldIds = $request->input('field_ids', []);
-        
-        DB::transaction(function () use ($fieldIds, $event) {
-            foreach ($fieldIds as $index => $fieldId) {
-                RegistrationField::where('id', $fieldId)
-                               ->where('event_id', $event->id)
-                               ->update(['order' => $index + 1]);
+            $fieldIds = $validated['field_ids'];
+            
+            // Verify all fields belong to this event
+            $fieldsCount = RegistrationField::whereIn('id', $fieldIds)
+                                          ->where('event_id', $event->id)
+                                          ->count();
+            
+            if ($fieldsCount !== count($fieldIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid field IDs provided'
+                ], 400);
             }
-        });
+            
+            DB::transaction(function () use ($fieldIds, $event) {
+                foreach ($fieldIds as $index => $fieldId) {
+                    RegistrationField::where('id', $fieldId)
+                                   ->where('event_id', $event->id)
+                                   ->update(['order' => $index + 1]);
+                }
+            });
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Field order updated successfully'
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Field order updated successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error reordering fields: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error updating field order: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function duplicate(Event $event, RegistrationField $registrationField)
     {
-        $this->authorize('create', RegistrationField::class);
+        try {
+            $this->authorize('create', RegistrationField::class);
 
-        $newField = $registrationField->replicate();
-        $newField->field_name = $registrationField->field_name . ' (Copy)';
-        $newField->order = $event->registrationFields()->max('order') + 1;
-        $newField->save();
+            $newField = $registrationField->replicate();
+            $newField->field_name = $registrationField->field_name . ' (Copy)';
+            $newField->order = $event->registrationFields()->max('order') + 1;
+            $newField->save();
 
-        if (request()->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Registration field duplicated successfully',
-                'field' => $newField
-            ]);
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Registration field duplicated successfully',
+                    'field' => $newField
+                ]);
+            }
+
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('success', 'Registration field duplicated successfully');
+        } catch (\Exception $e) {
+            Log::error('Error duplicating field: ' . $e->getMessage());
+            
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error duplicating field'
+                ], 500);
+            }
+
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('error', 'Error duplicating field');
         }
-
-        return redirect()->route('registration-fields.index', $event)
-                        ->with('success', 'Registration field duplicated successfully');
     }
 
     public function bulkDelete(Request $request, Event $event)
     {
-        $this->authorize('delete', RegistrationField::class);
+        try {
+            $this->authorize('create', RegistrationField::class);
 
-        $request->validate([
-            'field_ids' => 'required|array',
-            'field_ids.*' => 'exists:registration_fields,id'
-        ]);
-
-        $fieldIds = $request->input('field_ids', []);
-        
-        $deletedCount = RegistrationField::whereIn('id', $fieldIds)
-                                        ->where('event_id', $event->id)
-                                        ->delete();
-
-        if (request()->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => "{$deletedCount} registration fields deleted successfully"
+            $validated = $request->validate([
+                'field_ids' => 'required|array',
+                'field_ids.*' => 'exists:registration_fields,id'
             ]);
-        }
 
-        return redirect()->route('registration-fields.index', $event)
-                        ->with('success', "{$deletedCount} registration fields deleted successfully");
+            $fieldIds = $validated['field_ids'];
+            
+            // Verify all fields belong to this event
+            $fieldsToDelete = RegistrationField::whereIn('id', $fieldIds)
+                                              ->where('event_id', $event->id)
+                                              ->get();
+            
+            if ($fieldsToDelete->count() !== count($fieldIds)) {
+                if (request()->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid field IDs provided'
+                    ], 400);
+                }
+                
+                return redirect()->route('registration-fields.index', $event)
+                                ->with('error', 'Invalid field IDs provided');
+            }
+            
+            $deletedCount = $fieldsToDelete->count();
+            
+            foreach ($fieldsToDelete as $field) {
+                $field->delete();
+            }
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "{$deletedCount} registration fields deleted successfully"
+                ]);
+            }
+
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('success', "{$deletedCount} registration fields deleted successfully");
+        } catch (\Exception $e) {
+            Log::error('Error bulk deleting fields: ' . $e->getMessage());
+            
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error deleting fields: ' . $e->getMessage()
+                ], 500);
+            }
+
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('error', 'Error deleting fields');
+        }
     }
 
     public function export(Event $event)
@@ -224,10 +295,10 @@ class RegistrationFieldController extends Controller
         foreach ($fields as $field) {
             $csvContent .= sprintf(
                 "%s,%s,%s,%s,%d\n",
-                $field->field_name,
+                '"' . str_replace('"', '""', $field->field_name) . '"',
                 $field->field_type,
                 $field->is_required ? 'Yes' : 'No',
-                $field->options ?? '',
+                '"' . str_replace('"', '""', $field->options ?? '') . '"',
                 $field->order
             );
         }
@@ -239,47 +310,62 @@ class RegistrationFieldController extends Controller
 
     public function import(Request $request, Event $event)
     {
-        $this->authorize('create', RegistrationField::class);
+        try {
+            $this->authorize('create', RegistrationField::class);
 
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt'
-        ]);
+            $request->validate([
+                'csv_file' => 'required|file|mimes:csv,txt'
+            ]);
 
-        $file = $request->file('csv_file');
-        $csvData = file_get_contents($file->getRealPath());
-        $lines = array_map('str_getcsv', explode("\n", $csvData));
-        $header = array_shift($lines);
+            $file = $request->file('csv_file');
+            $csvData = file_get_contents($file->getRealPath());
+            $lines = array_map('str_getcsv', explode("\n", $csvData));
+            $header = array_shift($lines);
 
-        $imported = 0;
-        $errors = [];
+            $imported = 0;
+            $errors = [];
 
-        foreach ($lines as $index => $line) {
-            if (empty(array_filter($line))) continue; // Skip empty lines
+            foreach ($lines as $index => $line) {
+                if (empty(array_filter($line))) continue; // Skip empty lines
 
-            try {
-                $data = array_combine($header, $line);
-                
-                RegistrationField::create([
-                    'event_id' => $event->id,
-                    'field_name' => $data['Field Name'] ?? '',
-                    'field_type' => $data['Field Type'] ?? 'text',
-                    'is_required' => ($data['Required'] ?? 'No') === 'Yes',
-                    'options' => $data['Options'] ?? null,
-                    'order' => $event->registrationFields()->max('order') + 1,
-                ]);
+                try {
+                    $data = array_combine($header, $line);
+                    
+                    // Validate field type
+                    $fieldType = $data['Field Type'] ?? 'text';
+                    if (!array_key_exists($fieldType, RegistrationField::FIELD_TYPES)) {
+                        $fieldType = 'text';
+                    }
+                    
+                    RegistrationField::create([
+                        'event_id' => $event->id,
+                        'field_name' => $data['Field Name'] ?? 'Unnamed Field',
+                        'field_type' => $fieldType,
+                        'is_required' => ($data['Required'] ?? 'No') === 'Yes',
+                        'options' => !empty($data['Options']) ? $data['Options'] : null,
+                        'order' => $event->registrationFields()->max('order') + 1,
+                    ]);
 
-                $imported++;
-            } catch (\Exception $e) {
-                $errors[] = "Line " . ($index + 2) . ": " . $e->getMessage();
+                    $imported++;
+                } catch (\Exception $e) {
+                    $errors[] = "Line " . ($index + 2) . ": " . $e->getMessage();
+                }
             }
-        }
 
-        $message = "Imported {$imported} fields successfully.";
-        if (!empty($errors)) {
-            $message .= " Errors: " . implode(', ', $errors);
-        }
+            $message = "Imported {$imported} fields successfully.";
+            if (!empty($errors)) {
+                $message .= " Errors: " . implode(', ', array_slice($errors, 0, 3));
+                if (count($errors) > 3) {
+                    $message .= " and " . (count($errors) - 3) . " more.";
+                }
+            }
 
-        return redirect()->route('registration-fields.index', $event)
-                        ->with('success', $message);
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('success', $message);
+        } catch (\Exception $e) {
+            Log::error('Error importing fields: ' . $e->getMessage());
+            return redirect()->route('registration-fields.index', $event)
+                            ->with('error', 'Error importing fields');
+        }
     }
 }

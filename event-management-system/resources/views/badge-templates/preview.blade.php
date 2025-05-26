@@ -277,12 +277,44 @@
                     </div>
 
                     <!-- Preview Container -->
+
+                 <!-- Enhanced Zoom Controls -->
+                    <div class="zoom-controls no-print">
+                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-2 flex items-center space-x-2"
+                            style="width: 300px; margin: 0 auto;">
+                            <button id="zoomOut" 
+                                    class="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-colors" 
+                                    aria-label="Zoom Out">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                                </svg>
+                            </button>
+                            <div class="text-sm font-medium text-gray-700 px-2 py-1 bg-gray-100 rounded min-w-[60px] text-center" id="zoomLevel">100%</div>
+                            <button id="resetZoom" 
+                                    class="p-2 text-gray-600 hover:text-white hover:bg-gray-500 rounded-lg transition-colors" 
+                                    aria-label="Reset Zoom">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                            </button>
+                            <button id="zoomIn" 
+                                    class="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-colors" 
+                                    aria-label="Zoom In">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+
                     <div class="p-6">
+                       
                         <div class="badge-preview-wrapper">
                             <div class="relative flex justify-center">
                                 <div id="badge-preview"
                                      class="badge-preview-container relative"
-                                     style="width: {{ $badgeTemplate->width }}cm; height: {{ $badgeTemplate->height }}cm;"
+                                     style="width: {{ $badgeTemplate->width }}cm; height: {{ $badgeTemplate->height }}cm; border: 1px solid gray;"
                                      data-width="{{ $badgeTemplate->width }}"
                                      data-height="{{ $badgeTemplate->height }}">
 
@@ -331,33 +363,7 @@
                                     </div>
                                     @endforeach
 
-                                    <!-- Enhanced Zoom Controls -->
-                                    <div class="zoom-controls no-print">
-                                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-2 flex items-center space-x-2">
-                                            <button id="zoomOut" 
-                                                    class="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-colors" 
-                                                    aria-label="Zoom Out">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
-                                                </svg>
-                                            </button>
-                                            <div class="text-sm font-medium text-gray-700 px-2 py-1 bg-gray-100 rounded min-w-[60px] text-center" id="zoomLevel">100%</div>
-                                            <button id="resetZoom" 
-                                                    class="p-2 text-gray-600 hover:text-white hover:bg-gray-500 rounded-lg transition-colors" 
-                                                    aria-label="Reset Zoom">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                                </svg>
-                                            </button>
-                                            <button id="zoomIn" 
-                                                    class="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-colors" 
-                                                    aria-label="Zoom In">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
+                                   
                                 </div>
                             </div>
                         </div>
@@ -452,12 +458,8 @@
 
                         <form id="field-config-form" style="display: none;" class="space-y-6">
                             @csrf
-                            <div class="text-center pb-4 border-b border-gray-100">
-                                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                    </svg>
-                                </div>
+                            <div class="text-center ">
+                              
                                 <h4 class="font-medium text-gray-900">Editing Field</h4>
                             </div>
 
@@ -477,7 +479,7 @@
                                         <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
                                         </svg>
-                                        Font Size (pt)
+                                        Font Size
                                     </label>
                                     <input type="number" id="font-size" min="6" max="72" 
                                            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500">

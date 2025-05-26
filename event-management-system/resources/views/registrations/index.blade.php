@@ -1,47 +1,93 @@
-{{-- resources/views/registrations/index.blade.php --}}
 @extends('layouts.app')
 
 @section('title', 'Registrations')
 
 @section('content')
-<div class="container mx-auto px-4 py-6">
-    <!-- Header -->
-    <div class="flex justify-between items-center mb-6">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-800">Event Registrations</h1>
-            <p class="text-gray-600 mt-1">Manage event registrations and attendee information</p>
+<div class=" mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- CSRF Token for JavaScript -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
+    <!-- Header with enhanced design -->
+    <div class="mb-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+                <h1 class="text-4xl font-bold text-gray-900">Registrations</h1>
+                <p class="text-lg text-gray-600 mt-2">Manage and track event registrations</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <a href="{{ route('registrations.create') }}" 
+                   class="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    New Registration
+                </a>
+                <a href="{{ route('registrations.public-register') }}" 
+                   class="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    Public Registration
+                </a>
+            </div>
         </div>
-        
-        @can('create', App\Models\Registration::class)
-        <a href="{{ route('registrations.create') }}" 
-           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all ease-in-out">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            New Registration
-        </a>
-        @endcan
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div class="p-4">
-            <form method="GET" action="{{ route('registrations.index') }}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Messages with enhanced styling -->
+    @if(session('success'))
+    <div class="bg-gradient-to-r from-green-50 to-green-100 border-l-4 border-green-500 text-green-700 px-6 py-4 rounded-lg mb-6 shadow-md">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            {{ session('success') }}
+        </div>
+    </div>
+    @endif
+
+    @if(session('error'))
+    <div class="bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded-lg mb-6 shadow-md">
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            {{ session('error') }}
+        </div>
+    </div>
+    @endif
+
+    <!-- Enhanced Filters -->
+    <div class="bg-white shadow-xl rounded-2xl border border-gray-100 p-8 mb-8">
+        <div class="flex items-center mb-6">
+            <svg class="w-6 h-6 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z"></path>
+            </svg>
+            <h2 class="text-xl font-bold text-gray-800">Filters & Search</h2>
+        </div>
+        
+        <form method="GET" action="{{ route('registrations.index') }}" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <!-- Search -->
                 <div>
-                    <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
-                    <input type="text" 
-                           name="search" 
-                           id="search"
-                           value="{{ request('search') }}" 
-                           placeholder="Search registrations..." 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <label for="search" class="block text-sm font-semibold text-gray-700 mb-2">Search</label>
+                    <div class="relative">
+                        <input type="text" 
+                               id="search" 
+                               name="search" 
+                               value="{{ request('search') }}"
+                               placeholder="Name, email, or event..."
+                               class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <svg class="absolute left-3 top-3.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
                 </div>
 
                 <!-- Event Filter -->
                 <div>
-                    <label for="event_id" class="block text-sm font-medium text-gray-700 mb-1">Event</label>
-                    <select name="event_id" id="event_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <label for="event_id" class="block text-sm font-semibold text-gray-700 mb-2">Event</label>
+                    <select name="event_id" id="event_id" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                         <option value="">All Events</option>
                         @foreach($events as $event)
                             <option value="{{ $event->id }}" {{ request('event_id') == $event->id ? 'selected' : '' }}>
@@ -53,213 +99,251 @@
 
                 <!-- Status Filter -->
                 <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <select name="status" id="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <label for="status" class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                    <select name="status" id="status" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
                         <option value="">All Statuses</option>
-                        @foreach(\App\Models\Registration::STATUSES as $key => $label)
-                            <option value="{{ $key }}" {{ request('status') == $key ? 'selected' : '' }}>
-                                {{ $label }}
-                            </option>
-                        @endforeach
+                        <option value="confirmed" {{ request('status') == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                        <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                     </select>
                 </div>
 
-                <!-- Actions -->
-                <div class="flex items-end space-x-2">
-                    <button type="submit" 
-                            class="px-4 py-2 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">
-                        Filter
-                    </button>
-                    @if(request()->hasAny(['search', 'event_id', 'status', 'date_from', 'date_to']))
-                    <a href="{{ route('registrations.index') }}" 
-                       class="px-4 py-2 bg-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300">
-                        Clear
-                    </a>
-                    @endif
+                <!-- Date Range -->
+                <div>
+                    <label for="date_from" class="block text-sm font-semibold text-gray-700 mb-2">Date Range</label>
+                    <div class="flex space-x-2">
+                        <input type="date" 
+                               name="date_from" 
+                               value="{{ request('date_from') }}"
+                               class="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                        <input type="date" 
+                               name="date_to" 
+                               value="{{ request('date_to') }}"
+                               class="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
+                    </div>
                 </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Bulk Actions -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6 p-4">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <label class="flex items-center">
-                    <input type="checkbox" 
-                           id="select-all"
-                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                    <span class="ml-2 text-sm text-gray-700">Select All</span>
-                </label>
-                <span id="selected-count" class="text-sm text-gray-500">0 selected</span>
             </div>
-            
-            <div class="flex items-center space-x-2">
-                @can('export', App\Models\Registration::class)
-                <a href="{{ route('registrations.export', request()->query()) }}" 
-                   class="inline-flex items-center px-3 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+
+            <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-200">
+                <button type="submit" 
+                        class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
-                    Export
+                    Apply Filters
+                </button>
+                <a href="{{ route('registrations.index') }}" 
+                   class="inline-flex items-center px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 shadow-lg hover:shadow-xl transition-all duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Clear All
                 </a>
-                @endcan
+                <a href="{{ route('registrations.export', request()->query()) }}" 
+                   class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Export CSV
+                </a>
+            </div>
+        </form>
+    </div>
 
-                <div class="bulk-actions" style="display: none;">
-                    <select id="bulk-action" class="px-3 py-2 border border-gray-300 rounded-lg">
-                        <option value="">Bulk Actions</option>
-                        <option value="confirm">Confirm Selected</option>
-                        <option value="cancel">Cancel Selected</option>
-                        <option value="delete">Delete Selected</option>
-                    </select>
-                    <button onclick="executeBulkAction()" 
-                            class="px-3 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 ml-2">
-                        Apply
-                    </button>
-                </div>
+    <!-- Enhanced Bulk Actions -->
+    <div id="bulk-actions" class="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 shadow-lg rounded-xl p-6 mb-8 transform transition-all duration-300" style="display: none;">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-indigo-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
+                </svg>
+                <span id="selected-count" class="text-lg font-semibold text-indigo-800">0 selected</span>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button onclick="bulkAction('confirm')" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Confirm
+                </button>
+                <button onclick="bulkAction('cancel')" 
+                        class="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Cancel
+                </button>
+                <button onclick="bulkPrintBadges()" 
+                        class="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                    </svg>
+                    Print Badges
+                </button>
+                <button onclick="bulkAction('delete')" 
+                        class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Delete
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Success/Error Messages -->
-    @if(session('success'))
-    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-        {{ session('success') }}
-    </div>
-    @endif
+    <!-- Enhanced Registrations Table -->
+    <div class="bg-white shadow-2xl rounded-2xl border border-gray-100 overflow-hidden">
+        <div class="bg-gradient-to-r from-gray-50 to-gray-100 p-8 border-b border-gray-200">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">
+                        Registrations ({{ $registrations->total() }})
+                    </h2>
+                    <p class="text-gray-600 mt-1">Manage and track all event registrations</p>
+                </div>
+                @if($registrations->count() > 0)
+                <label class="flex items-center bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="select-all" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <span class="ml-3 text-sm font-medium text-gray-700">Select All</span>
+                </label>
+                @endif
+            </div>
+        </div>
 
-    @if(session('error'))
-    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-        {{ session('error') }}
-    </div>
-    @endif
-
-    <!-- Registrations Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         @if($registrations->count() > 0)
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-200">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <input type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" id="header-checkbox">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            <input type="checkbox" class="select-all-header h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Attendee
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                            Participant
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Event
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Ticket Type
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Status
                         </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Registered
                         </th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Actions
                         </th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
+                <tbody class="bg-white divide-y divide-gray-100">
                     @foreach($registrations as $registration)
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
-                                   class="registration-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                   data-registration-id="{{ $registration->id }}">
+                                   class="registration-checkbox h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-offset-2"
+                                   data-registration-id="{{ $registration->id }}"
+                                   data-participant-name="{{ $registration->user->name ?? 'N/A' }}"
+                                   data-event-name="{{ $registration->event->name ?? 'N/A' }}"
+                                   data-event-date="{{ $registration->event->start_date ? $registration->event->start_date->format('M d, Y') : 'TBD' }}"
+                                   data-ticket-type="{{ $registration->ticketType->name ?? 'N/A' }}"
+                                   data-status="{{ $registration->status }}">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
-                                <div class="flex-shrink-0 h-10 w-10">
-                                    <div class="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                                        <span class="text-white font-medium text-sm">
-                                            {{ strtoupper(substr($registration->user->name ?? 'U', 0, 1)) }}
+                                <div class="flex-shrink-0 h-12 w-12">
+                                    <div class="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                                        <span class="text-white font-bold text-sm">
+                                            {{ strtoupper(substr($registration->user->name ?? 'U', 0, 2)) }}
                                         </span>
                                     </div>
                                 </div>
                                 <div class="ml-4">
-                                    <div class="text-sm font-medium text-gray-900">
-                                        {{ $registration->user->name ?? 'Unknown User' }}
+                                    <div class="text-sm font-semibold text-gray-900">
+                                        {{ $registration->user->name ?? 'N/A' }}
                                     </div>
                                     <div class="text-sm text-gray-500">
-                                        {{ $registration->user->email ?? 'No email' }}
+                                        {{ $registration->user->email ?? 'N/A' }}
                                     </div>
                                 </div>
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">{{ $registration->event->name }}</div>
-                            <div class="text-sm text-gray-500">{{ $registration->event->start_date->format('M d, Y') }}</div>
+                            <div class="text-sm font-semibold text-gray-900">
+                                {{ $registration->event->name ?? 'N/A' }}
+                            </div>
+                            <div class="text-sm text-gray-500 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                {{ $registration->event->start_date ? $registration->event->start_date->format('M d, Y') : 'TBD' }}
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">
+                                {{ $registration->ticketType->name ?? 'N/A' }}
+                            </div>
                             @if($registration->ticketType)
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {{ $registration->ticketType->name }}
-                            </span>
-                            @else
-                            <span class="text-gray-400 text-sm">No ticket</span>
+                            <div class="text-sm font-semibold text-green-600">
+                                ${{ $registration->ticketType->price }}
+                            </div>
                             @endif
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                {{ $registration->status === 'confirmed' ? 'bg-green-100 text-green-800' : 
-                                   ($registration->status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800') }}">
-                                {{ $registration->status_display }}
+                            <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full shadow-sm
+                                {{ $registration->status === 'confirmed' ? 'bg-green-100 text-green-800 border border-green-200' : '' }}
+                                {{ $registration->status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : '' }}
+                                {{ $registration->status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' : '' }}">
+                                {{ ucfirst($registration->status) }}
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ $registration->created_at->format('M d, Y H:i') }}
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                {{ $registration->created_at->format('M d, Y') }}
+                            </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div class="flex items-center justify-end space-x-2">
-                                @can('view', $registration)
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center space-x-2">
                                 <a href="{{ route('registrations.show', $registration) }}" 
-                                   class="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50" 
-                                   title="View">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                   class="inline-flex items-center justify-center w-8 h-8 text-blue-600 hover:text-blue-900 hover:bg-blue-100 rounded-full transition-all duration-200" title="View Details">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                     </svg>
                                 </a>
-                                @endcan
-
-                                @can('update', $registration)
                                 <a href="{{ route('registrations.edit', $registration) }}" 
-                                   class="text-yellow-600 hover:text-yellow-900 p-1 rounded hover:bg-yellow-50" 
-                                   title="Edit">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                   class="inline-flex items-center justify-center w-8 h-8 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded-full transition-all duration-200" title="Edit Registration">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                     </svg>
                                 </a>
-                                @endcan
-
-                                @if($registration->qrCode)
-                                <a href="{{ route('qr-codes.download', $registration) }}" 
-                                   class="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50" 
-                                   title="Download QR Code">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 16h4.01M12 8h4.01M8 12h.01M16 8h.01m-8 8h.01m0-4h.01m8 0h.01M8 8h.01M12 16h.01" />
+                                <button onclick="printSingleBadge({{ $registration->id }})" 
+                                        class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-100 rounded-full transition-all duration-200" title="Print Badge">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                                     </svg>
-                                </a>
-                                @endif
-
-                                @can('delete', $registration)
-                                <form action="{{ route('registrations.destroy', $registration) }}" method="POST" class="inline-block" onsubmit="return confirm('Are you sure you want to delete this registration?')">
+                                </button>
+                                <form action="{{ route('registrations.destroy', $registration) }}" 
+                                      method="POST" 
+                                      class="inline-block"
+                                      onsubmit="return confirm('Are you sure you want to delete this registration?')">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" 
-                                            class="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50" 
-                                            title="Delete">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-900 hover:bg-red-100 rounded-full transition-all duration-200" 
+                                            title="Delete Registration">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                         </svg>
                                     </button>
                                 </form>
-                                @endcan
                             </div>
                         </td>
                     </tr>
@@ -268,96 +352,96 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        @if($registrations->hasPages())
-        <div class="px-6 py-4 border-t border-gray-200">
+        <!-- Enhanced Pagination -->
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
             {{ $registrations->appends(request()->query())->links() }}
         </div>
-        @endif
-
         @else
-        <!-- Empty State -->
-        <div class="text-center py-12">
-            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <h3 class="mt-2 text-sm font-medium text-gray-900">No registrations found</h3>
-            <p class="mt-1 text-sm text-gray-500">
-                @if(request()->hasAny(['search', 'event_id', 'status']))
-                    No registrations match your search criteria.
-                @else
-                    Get started by creating your first registration.
-                @endif
-            </p>
-            @can('create', App\Models\Registration::class)
-            @if(!request()->hasAny(['search', 'event_id', 'status']))
-            <div class="mt-6">
-                <a href="{{ route('registrations.create') }}" 
-                   class="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    New Registration
-                </a>
+        <!-- Enhanced Empty State -->
+        <div class="text-center py-16">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
             </div>
-            @endif
-            @endcan
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">No registrations found</h3>
+            <p class="text-gray-600 mb-6">Get started by creating your first registration or adjust your filters.</p>
+            <a href="{{ route('registrations.create') }}" 
+               class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create New Registration
+            </a>
         </div>
         @endif
+    </div>
+</div>
+
+<!-- Print Badge Template (Hidden) -->
+<div id="badge-template" class="hidden">
+    <div class="badge-container">
+        <!-- Badge content will be inserted here -->
     </div>
 </div>
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    initializeBulkActions();
-});
-
-function initializeBulkActions() {
-    const selectAllCheckbox = document.getElementById('select-all');
-    const headerCheckbox = document.getElementById('header-checkbox');
+    const selectAllMain = document.getElementById('select-all');
+    const selectAllHeader = document.querySelector('.select-all-header');
     const registrationCheckboxes = document.querySelectorAll('.registration-checkbox');
-    const bulkActionsDiv = document.querySelector('.bulk-actions');
+    const bulkActionsDiv = document.getElementById('bulk-actions');
     const selectedCountSpan = document.getElementById('selected-count');
 
-    // Header checkbox functionality
-    if (headerCheckbox) {
-        headerCheckbox.addEventListener('change', function() {
-            registrationCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-            updateBulkActionVisibility();
+    // Get CSRF token
+    function getCSRFToken() {
+        return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+
+    // Select all functionality
+    function handleSelectAll(checked) {
+        registrationCheckboxes.forEach(checkbox => {
+            checkbox.checked = checked;
+        });
+        updateBulkActions();
+    }
+
+    if (selectAllMain) {
+        selectAllMain.addEventListener('change', function() {
+            handleSelectAll(this.checked);
+            if (selectAllHeader) selectAllHeader.checked = this.checked;
         });
     }
 
-    // Select all checkbox functionality
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            registrationCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-            if (headerCheckbox) {
-                headerCheckbox.checked = this.checked;
-            }
-            updateBulkActionVisibility();
+    if (selectAllHeader) {
+        selectAllHeader.addEventListener('change', function() {
+            handleSelectAll(this.checked);
+            if (selectAllMain) selectAllMain.checked = this.checked;
         });
     }
 
     // Individual checkbox change
     registrationCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
-            updateBulkActionVisibility();
+            updateBulkActions();
             
-            // Update header checkbox state
-            if (headerCheckbox) {
-                const checkedCount = document.querySelectorAll('.registration-checkbox:checked').length;
-                headerCheckbox.checked = checkedCount === registrationCheckboxes.length;
-                headerCheckbox.indeterminate = checkedCount > 0 && checkedCount < registrationCheckboxes.length;
+            // Update select all checkboxes
+            const allChecked = Array.from(registrationCheckboxes).every(cb => cb.checked);
+            const someChecked = Array.from(registrationCheckboxes).some(cb => cb.checked);
+            
+            if (selectAllMain) {
+                selectAllMain.checked = allChecked;
+                selectAllMain.indeterminate = someChecked && !allChecked;
+            }
+            if (selectAllHeader) {
+                selectAllHeader.checked = allChecked;
+                selectAllHeader.indeterminate = someChecked && !allChecked;
             }
         });
     });
 
-    function updateBulkActionVisibility() {
+    function updateBulkActions() {
         const checkedBoxes = document.querySelectorAll('.registration-checkbox:checked');
         const count = checkedBoxes.length;
         
@@ -369,62 +453,343 @@ function initializeBulkActions() {
             bulkActionsDiv.style.display = 'none';
         }
     }
-}
 
-function executeBulkAction() {
-    const action = document.getElementById('bulk-action').value;
-    const checkedBoxes = document.querySelectorAll('.registration-checkbox:checked');
-    const registrationIds = Array.from(checkedBoxes).map(cb => cb.getAttribute('data-registration-id'));
-    
-    if (!action) {
-        alert('Please select an action');
-        return;
-    }
-    
-    if (registrationIds.length === 0) {
-        alert('Please select registrations');
-        return;
-    }
-    
-    let confirmMessage = '';
-    switch(action) {
-        case 'confirm':
-            confirmMessage = `Confirm ${registrationIds.length} registration(s)?`;
-            break;
-        case 'cancel':
-            confirmMessage = `Cancel ${registrationIds.length} registration(s)?`;
-            break;
-        case 'delete':
-            confirmMessage = `Delete ${registrationIds.length} registration(s)? This action cannot be undone.`;
-            break;
-    }
-    
-    if (confirm(confirmMessage)) {
-        fetch('{{ route('registrations.bulk-action') }}', {
+    // Bulk actions
+    window.bulkAction = function(action) {
+        const checkedBoxes = document.querySelectorAll('.registration-checkbox:checked');
+        const registrationIds = Array.from(checkedBoxes).map(cb => cb.getAttribute('data-registration-id'));
+        
+        if (registrationIds.length === 0) {
+            alert('Please select registrations first');
+            return;
+        }
+
+        let actionText = action;
+        if (action === 'confirm') actionText = 'confirm';
+        if (action === 'cancel') actionText = 'cancel';
+        if (action === 'delete') actionText = 'delete';
+
+        if (!confirm(`Are you sure you want to ${actionText} ${registrationIds.length} registration(s)?`)) {
+            return;
+        }
+
+        // Show loading state
+        const loadingDiv = document.createElement('div');
+        loadingDiv.innerHTML = `
+            <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-lg p-6 flex items-center">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing ${actionText} action...
+                </div>
+            </div>
+        `;
+        document.body.appendChild(loadingDiv);
+
+        fetch('/registrations/bulk-action', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                'X-CSRF-TOKEN': getCSRFToken(),
+                'Accept': 'application/json'
             },
             body: JSON.stringify({
                 action: action,
                 registration_ids: registrationIds
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
+            document.body.removeChild(loadingDiv);
             if (data.success) {
-                location.reload();
+                // Show success message
+                const successDiv = document.createElement('div');
+                successDiv.innerHTML = `
+                    <div class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 z-50">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            ${data.message}
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(successDiv);
+                setTimeout(() => {
+                    document.body.removeChild(successDiv);
+                    location.reload();
+                }, 2000);
             } else {
-                alert('Error executing bulk action');
+                alert('Error performing bulk action: ' + (data.message || 'Unknown error'));
             }
         })
         .catch(error => {
+            document.body.removeChild(loadingDiv);
             console.error('Error:', error);
-            alert('Error executing bulk action');
+            alert('Error performing bulk action. Please try again.');
         });
+    };
+
+    // Print single badge
+    window.printSingleBadge = function(registrationId) {
+        const checkbox = document.querySelector(`[data-registration-id="${registrationId}"]`);
+        if (!checkbox) return;
+
+        const badgeData = {
+            participantName: checkbox.getAttribute('data-participant-name'),
+            eventName: checkbox.getAttribute('data-event-name'),
+            eventDate: checkbox.getAttribute('data-event-date'),
+            ticketType: checkbox.getAttribute('data-ticket-type'),
+            status: checkbox.getAttribute('data-status'),
+            registrationId: registrationId
+        };
+
+        printBadges([badgeData]);
+    };
+
+    // Bulk print badges
+    window.bulkPrintBadges = function() {
+        const checkedBoxes = document.querySelectorAll('.registration-checkbox:checked');
+        
+        if (checkedBoxes.length === 0) {
+            alert('Please select registrations to print badges for');
+            return;
+        }
+
+        const badgesData = Array.from(checkedBoxes).map(checkbox => ({
+            participantName: checkbox.getAttribute('data-participant-name'),
+            eventName: checkbox.getAttribute('data-event-name'),
+            eventDate: checkbox.getAttribute('data-event-date'),
+            ticketType: checkbox.getAttribute('data-ticket-type'),
+            status: checkbox.getAttribute('data-status'),
+            registrationId: checkbox.getAttribute('data-registration-id')
+        }));
+
+        printBadges(badgesData);
+    };
+
+    // Print badges function
+    function printBadges(badgesData) {
+        const printWindow = window.open('', '_blank');
+        const badgesHtml = badgesData.map(badge => createBadgeHtml(badge)).join('\n');
+        
+        const printContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Event Registration Badges</title>
+                <style>
+                    @page {
+                        margin: 0.5in;
+                        size: letter;
+                    }
+                    body {
+                        font-family: 'Arial', sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background: #f5f5f5;
+                    }
+                    .badges-container {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 20px;
+                        justify-content: center;
+                    }
+                    .badge {
+                        width: 350px;
+                        height: 250px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        border-radius: 20px;
+                        position: relative;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                        overflow: hidden;
+                        break-inside: avoid;
+                        page-break-inside: avoid;
+                    }
+                    .badge::before {
+                        content: '';
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="white" opacity="0.1"/><circle cx="80" cy="80" r="1" fill="white" opacity="0.1"/><circle cx="40" cy="60" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+                    }
+                    .badge-header {
+                        background: rgba(255,255,255,0.15);
+                        backdrop-filter: blur(10px);
+                        padding: 15px 20px;
+                        color: white;
+                        position: relative;
+                        z-index: 2;
+                    }
+                    .badge-title {
+                        font-size: 14px;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                        margin: 0;
+                        text-align: center;
+                    }
+                    .badge-content {
+                        padding: 20px;
+                        color: white;
+                        position: relative;
+                        z-index: 2;
+                        height: calc(100% - 60px);
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                    }
+                    .participant-name {
+                        font-size: 22px;
+                        font-weight: bold;
+                        text-align: center;
+                        margin-bottom: 15px;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+                    }
+                    .event-details {
+                        text-align: center;
+                        margin-bottom: 15px;
+                    }
+                    .event-name {
+                        font-size: 16px;
+                        font-weight: 600;
+                        margin-bottom: 5px;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+                    }
+                    .event-date {
+                        font-size: 14px;
+                        opacity: 0.9;
+                    }
+                    .badge-footer {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        font-size: 12px;
+                        margin-top: auto;
+                    }
+                    .ticket-type {
+                        background: rgba(255,255,255,0.2);
+                        padding: 5px 10px;
+                        border-radius: 15px;
+                        font-weight: 600;
+                    }
+                    .registration-id {
+                        opacity: 0.8;
+                        font-family: monospace;
+                    }
+                    .status-badge {
+                        position: absolute;
+                        top: 15px;
+                        right: 15px;
+                        padding: 5px 10px;
+                        border-radius: 12px;
+                        font-size: 10px;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        z-index: 3;
+                    }
+                    .status-confirmed {
+                        background: rgba(34, 197, 94, 0.9);
+                        color: white;
+                    }
+                    .status-pending {
+                        background: rgba(251, 191, 36, 0.9);
+                        color: white;
+                    }
+                    .status-cancelled {
+                        background: rgba(239, 68, 68, 0.9);
+                        color: white;
+                    }
+                    @media print {
+                        body {
+                            background: white;
+                        }
+                        .badge {
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="badges-container">
+                    ${badgesHtml}
+                </div>
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                            window.close();
+                        }, 500);
+                    };
+                </script>
+            </body>
+            </html>
+        `;
+        
+        printWindow.document.write(printContent);
+        printWindow.document.close();
     }
-}
+
+    function createBadgeHtml(badge) {
+        return `
+            <div class="badge">
+                <div class="status-badge status-${badge.status}">
+                    ${badge.status}
+                </div>
+                <div class="badge-header">
+                    <h3 class="badge-title">Event Registration</h3>
+                </div>
+                <div class="badge-content">
+                    <div class="participant-name">${badge.participantName}</div>
+                    <div class="event-details">
+                        <div class="event-name">${badge.eventName}</div>
+                        <div class="event-date">${badge.eventDate}</div>
+                    </div>
+                    <div class="badge-footer">
+                        <div class="ticket-type">${badge.ticketType}</div>
+                        <div class="registration-id">#${badge.registrationId}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+});
 </script>
+@endpush
+
+@push('styles')
+<style>
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+    
+    /* Custom checkbox styling */
+    input[type="checkbox"]:indeterminate {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3e%3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e");
+        border-color: #3b82f6;
+        background-color: #3b82f6;
+    }
+    
+    /* Enhanced hover effects */
+    .hover-scale:hover {
+        transform: scale(1.02);
+    }
+    
+    /* Smooth transitions */
+    * {
+        transition: all 0.2s ease;
+    }
+</style>
 @endpush
 @endsection

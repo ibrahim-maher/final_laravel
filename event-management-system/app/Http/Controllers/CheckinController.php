@@ -283,9 +283,13 @@ class CheckinController extends Controller
         
         return Cache::remember($cacheKey, 300, function() {
             return [
-                'checkins' => VisitorLog::checkins()->today()->count(),
-                'checkouts' => VisitorLog::checkouts()->today()->count(),
-                'active_visitors' => VisitorLog::getActiveVisitors(),
+                'checkins' => VisitorLog::where('action', 'checkin')
+                    ->whereDate('created_at', today())
+                    ->count(),
+                'checkouts' => VisitorLog::where('action', 'checkout')
+                    ->whereDate('created_at', today())
+                    ->count(),
+                'active_visitors' => $this->getActiveVisitorsCount(),
                 'events_active' => Event::where('is_active', true)->count()
             ];
         });
@@ -294,40 +298,44 @@ class CheckinController extends Controller
     /**
      * Get currently active visitors
      */
-    private function getActiveVisitors()
+    public function getActiveVisitors()
     {
-        return Registration::whereHas('visitorLogs', function($query) {
-            $query->where('action', VisitorLog::ACTION_CHECKIN)
-                ->whereNotIn('registration_id', function($subQuery) {
-                    $subQuery->select('registration_id')
-                        ->from('visitor_logs')
-                        ->where('action', VisitorLog::ACTION_CHECKOUT)
-                        ->where('created_at', '>', function($innerQuery) {
-                            $innerQuery->select('created_at')
-                                ->from('visitor_logs as vl2')
-                                ->whereColumn('vl2.registration_id', 'visitor_logs.registration_id')
-                                ->where('vl2.action', VisitorLog::ACTION_CHECKIN)
-                                ->orderBy('created_at', 'desc')
-                                ->limit(1);
-                        });
-                });
-        })
-        ->with(['user', 'event'])
-        ->get()
-        ->map(function($registration) {
-            $lastCheckin = $registration->visitorLogs()
-                ->where('action', VisitorLog::ACTION_CHECKIN)
-                ->latest()
-                ->first();
-                
-            return [
-                'registration_id' => $registration->id,
-                'user_name' => $registration->user->name,
-                'event_name' => $registration->event->name,
-                'checked_in_at' => $lastCheckin->formatted_created_at ?? null,
-                'duration' => $lastCheckin ? now()->diffForHumans($lastCheckin->created_at, true) : null
-            ];
-        });
+        // Get all registrations that have checked in but not checked out
+        $activeVisitors = DB::table('visitor_logs as vl1')
+            ->select('vl1.registration_id', 'vl1.created_at as checkin_time')
+            ->join('registrations', 'registrations.id', '=', 'vl1.registration_id')
+            ->join('users', 'users.id', '=', 'registrations.user_id')
+            ->join('events', 'events.id', '=', 'registrations.event_id')
+            ->where('vl1.action', 'checkin')
+            ->whereNotExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('visitor_logs as vl2')
+                    ->whereRaw('vl2.registration_id = vl1.registration_id')
+                    ->where('vl2.action', 'checkout')
+                    ->whereRaw('vl2.created_at > vl1.created_at');
+            })
+            ->whereNull('vl1.deleted_at')
+            ->get();
+
+        return $activeVisitors;
+    }
+
+    /**
+     * Get count of currently active visitors
+     */
+    private function getActiveVisitorsCount()
+    {
+        return DB::table('visitor_logs as vl1')
+            ->where('vl1.action', 'checkin')
+            ->whereNotExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('visitor_logs as vl2')
+                    ->whereRaw('vl2.registration_id = vl1.registration_id')
+                    ->where('vl2.action', 'checkout')
+                    ->whereRaw('vl2.created_at > vl1.created_at');
+            })
+            ->whereNull('vl1.deleted_at')
+            ->count();
     }
 
     /**

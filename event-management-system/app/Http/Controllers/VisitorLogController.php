@@ -9,10 +9,14 @@ use App\Models\Registration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class VisitorLogController extends Controller
 {
+    use AuthorizesRequests;
+
     /**
      * Display visitor logs with advanced filtering
      */
@@ -34,7 +38,19 @@ class VisitorLogController extends Controller
 
         // Get filter options
         $events = Event::orderBy('name')->get();
-        $creators = User::whereHas('created_logs')->orderBy('name')->get();
+        
+        // Handle case where User model might not have createdLogs relationship
+        try {
+            $creators = User::whereHas('createdLogs')->orderBy('name')->get();
+        } catch (\Exception $e) {
+            // Fallback: get users who have created logs by checking the visitor_logs table directly
+            $creators = User::whereIn('id', function($query) {
+                $query->select('created_by')
+                      ->from('visitor_logs')
+                      ->whereNotNull('created_by')
+                      ->distinct();
+            })->orderBy('name')->get();
+        }
 
         // Get statistics
         $stats = $this->getFilteredStatistics($request);
@@ -42,17 +58,20 @@ class VisitorLogController extends Controller
         // Get analytics data
         $analytics = $this->getAnalyticsData($request);
 
+        // Get recent activity for live feed
+        $recentActivity = $this->getRecentActivity(null, 10);
+
         return view('visitor-logs.index', compact(
-            'logs', 'events', 'creators', 'stats', 'analytics'
+            'logs', 'events', 'creators', 'stats', 'analytics', 'recentActivity'
         ));
     }
 
     /**
      * Show detailed visitor log
      */
-    public function show(VisitorLog $visitorLog)
+    public function show($id)
     {
-        $visitorLog->load(['registration.user', 'registration.event', 'creator']);
+        $visitorLog = VisitorLog::with(['registration.user', 'registration.event', 'creator'])->findOrFail($id);
         
         // Get related logs for this registration
         $relatedLogs = VisitorLog::where('registration_id', $visitorLog->registration_id)
@@ -65,7 +84,106 @@ class VisitorLogController extends Controller
         // Get registration timeline
         $timeline = $this->getRegistrationTimeline($visitorLog->registration_id);
 
+        if (request()->expectsJson()) {
+            return response()->json([
+                'html' => view('visitor-logs.partials.details', compact('visitorLog', 'relatedLogs', 'timeline'))->render()
+            ]);
+        }
+
         return view('visitor-logs.show', compact('visitorLog', 'relatedLogs', 'timeline'));
+    }
+
+    /**
+     * Delete a visitor log
+     */
+    public function destroy($id)
+    {
+        $visitorLog = VisitorLog::findOrFail($id);
+        
+        // Simple authorization check
+        if (!auth()->user()->isAdmin()) {
+            abort(403, 'Access denied');
+        }
+
+        try {
+            $visitorLog->delete();
+            
+            Log::info('Visitor log deleted', [
+                'log_id' => $visitorLog->id,
+                'deleted_by' => auth()->id(),
+                'registration_id' => $visitorLog->registration_id
+            ]);
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Log deleted successfully'
+                ]);
+            }
+
+            return redirect()->route('visitor-logs.index')
+                           ->with('success', 'Log deleted successfully');
+
+        } catch (\Exception $e) {
+            Log::error('Failed to delete visitor log', [
+                'log_id' => $visitorLog->id,
+                'error' => $e->getMessage()
+            ]);
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to delete log'
+                ], 500);
+            }
+
+            return redirect()->back()->with('error', 'Failed to delete log');
+        }
+    }
+
+    /**
+     * Bulk delete visitor logs
+     */
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'exists:visitor_logs,id'
+        ]);
+
+        try {
+            $logs = VisitorLog::whereIn('id', $request->ids)->get();
+            
+            // Check authorization for each log
+            foreach ($logs as $log) {
+                $this->authorize('delete', $log);
+            }
+
+            $deletedCount = VisitorLog::whereIn('id', $request->ids)->delete();
+
+            Log::info('Bulk delete visitor logs', [
+                'deleted_count' => $deletedCount,
+                'deleted_by' => auth()->id(),
+                'ids' => $request->ids
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'deleted_count' => $deletedCount,
+                'message' => "{$deletedCount} logs deleted successfully"
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to bulk delete visitor logs', [
+                'error' => $e->getMessage(),
+                'ids' => $request->ids
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete logs'
+            ], 500);
+        }
     }
 
     /**
@@ -121,8 +239,21 @@ class VisitorLogController extends Controller
      */
     public function export(Request $request)
     {
+        $request->validate([
+            'format' => 'nullable|in:csv,excel,pdf',
+            'ids' => 'nullable|array',
+            'ids.*' => 'exists:visitor_logs,id'
+        ]);
+
         $query = VisitorLog::with(['registration.user', 'registration.event', 'creator']);
-        $this->applyFilters($query, $request);
+        
+        // If specific IDs are provided, export only those
+        if ($request->filled('ids')) {
+            $query->whereIn('id', $request->ids);
+        } else {
+            // Apply filters
+            $this->applyFilters($query, $request);
+        }
 
         $format = $request->input('format', 'csv');
         $logs = $query->orderBy('created_at', 'desc')->get();
@@ -245,7 +376,7 @@ class VisitorLogController extends Controller
                 'per_page' => $logs->perPage(),
                 'total' => $logs->total()
             ],
-            'stats' => VisitorLog::getStatistics($request->event_id)
+            'stats' => $this->getFilteredStatistics($request)
         ]);
     }
 
@@ -326,7 +457,7 @@ class VisitorLogController extends Controller
                 'total_checkouts' => $checkouts,
                 'total_duration' => $totalDuration,
                 'average_duration' => round($avgDuration ?? 0, 2),
-                'active_visitors' => $checkins - $checkouts,
+                'active_visitors' => max(0, $checkins - $checkouts),
                 'completion_rate' => $checkins > 0 ? round(($checkouts / $checkins) * 100, 2) : 0
             ];
         });
@@ -339,8 +470,8 @@ class VisitorLogController extends Controller
 
         return Cache::remember($cacheKey, 600, function() use ($eventId) {
             return [
-                'hourly_distribution' => VisitorLog::getHourlyDistribution($eventId),
-                'peak_hours' => VisitorLog::getPeakHours($eventId),
+                'hourly_distribution' => $this->getHourlyDistribution($eventId, now()->startOfDay(), now()->endOfDay()),
+                'peak_hours' => $this->getPeakTimes($eventId, now()->startOfDay(), now()->endOfDay()),
                 'daily_trends' => $this->getDailyTrends($eventId, now()->subDays(7), now())
             ];
         });
@@ -442,20 +573,36 @@ class VisitorLogController extends Controller
 
     private function getTopEvents($dateFrom, $dateTo)
     {
-        return VisitorLog::selectRaw('event_id, COUNT(*) as visit_count')
-                        ->join('registrations', 'visitor_logs.registration_id', '=', 'registrations.id')
-                        ->join('events', 'registrations.event_id', '=', 'events.id')
-                        ->whereBetween('visitor_logs.created_at', [$dateFrom, $dateTo])
-                        ->groupBy('event_id')
-                        ->orderBy('visit_count', 'desc')
-                        ->limit(10)
-                        ->with('registration.event')
-                        ->get();
+        return DB::table('visitor_logs')
+                ->join('registrations', 'visitor_logs.registration_id', '=', 'registrations.id')
+                ->join('events', 'registrations.event_id', '=', 'events.id')
+                ->selectRaw('events.id, events.name, COUNT(*) as visit_count')
+                ->whereBetween('visitor_logs.created_at', [$dateFrom, $dateTo])
+                ->whereNull('visitor_logs.deleted_at')
+                ->groupBy('events.id', 'events.name')
+                ->orderBy('visit_count', 'desc')
+                ->limit(10)
+                ->get();
     }
 
     private function getPeakTimes($eventId, $dateFrom, $dateTo)
     {
-        return VisitorLog::getPeakHours($eventId, $dateFrom->format('Y-m-d'), $dateTo->format('Y-m-d'));
+        $hourlyData = $this->getHourlyDistribution($eventId, $dateFrom, $dateTo);
+        
+        if (empty($hourlyData)) {
+            return [];
+        }
+
+        $max = max($hourlyData);
+        $peakHours = [];
+        
+        foreach ($hourlyData as $hour => $count) {
+            if ($count === $max && $count > 0) {
+                $peakHours[$hour] = $count;
+            }
+        }
+
+        return $peakHours;
     }
 
     private function getVisitorPatterns($eventId, $dateFrom, $dateTo)
@@ -481,31 +628,42 @@ class VisitorLogController extends Controller
 
     private function getActiveVisitorsData($eventId)
     {
-        $query = Registration::whereHas('visitorLogs', function($q) {
-            $q->where('action', 'checkin')
-              ->whereNotExists(function($subQ) {
-                  $subQ->select(DB::raw(1))
-                       ->from('visitor_logs as vl2')
-                       ->whereColumn('vl2.registration_id', 'visitor_logs.registration_id')
-                       ->where('vl2.action', 'checkout')
-                       ->where('vl2.created_at', '>', DB::raw('visitor_logs.created_at'));
-              });
-        })->with(['user', 'event']);
+        $query = DB::table('visitor_logs as vl1')
+            ->select([
+                'vl1.registration_id',
+                'vl1.created_at as checkin_time',
+                'r.user_id',
+                'r.event_id',
+                'u.name as user_name',
+                'u.email as user_email',
+                'e.name as event_name'
+            ])
+            ->join('registrations as r', 'r.id', '=', 'vl1.registration_id')
+            ->join('users as u', 'u.id', '=', 'r.user_id')
+            ->join('events as e', 'e.id', '=', 'r.event_id')
+            ->where('vl1.action', 'checkin')
+            ->whereNotExists(function($query) {
+                $query->select(DB::raw(1))
+                    ->from('visitor_logs as vl2')
+                    ->whereRaw('vl2.registration_id = vl1.registration_id')
+                    ->where('vl2.action', 'checkout')
+                    ->whereRaw('vl2.created_at > vl1.created_at');
+            })
+            ->whereNull('vl1.deleted_at');
 
         if ($eventId) {
-            $query->where('event_id', $eventId);
+            $query->where('r.event_id', $eventId);
         }
 
-        return $query->get()->map(function($registration) {
-            $lastCheckin = $registration->visitorLogs()
-                                       ->where('action', 'checkin')
-                                       ->latest()
-                                       ->first();
-            
+        return $query->get()->map(function($visitor) {
             return [
-                'registration' => $registration,
-                'checked_in_at' => $lastCheckin->created_at,
-                'duration' => now()->diffInMinutes($lastCheckin->created_at)
+                'registration_id' => $visitor->registration_id,
+                'user_id' => $visitor->user_id,
+                'user_name' => $visitor->user_name,
+                'user_email' => $visitor->user_email,
+                'event_name' => $visitor->event_name,
+                'checked_in_at' => Carbon::parse($visitor->checkin_time),
+                'duration_minutes' => now()->diffInMinutes(Carbon::parse($visitor->checkin_time))
             ];
         });
     }
@@ -534,19 +692,34 @@ class VisitorLogController extends Controller
             });
         }
 
+        $todayCheckins = (clone $baseQuery)
+            ->where('action', 'checkin')
+            ->whereDate('created_at', today())
+            ->count();
+
+        $todayCheckouts = (clone $baseQuery)
+            ->where('action', 'checkout')
+            ->whereDate('created_at', today())
+            ->count();
+
+        $activeVisitors = $this->getActiveVisitorsData($eventId)->count();
+
+        $lastHourCheckins = (clone $baseQuery)
+            ->where('action', 'checkin')
+            ->where('created_at', '>=', now()->subHour())
+            ->count();
+
         return [
-            'today_checkins' => (clone $baseQuery)->checkins()->today()->count(),
-            'today_checkouts' => (clone $baseQuery)->checkouts()->today()->count(),
-            'active_visitors' => VisitorLog::getActiveVisitors($eventId),
-            'last_hour_checkins' => (clone $baseQuery)->checkins()
-                                                     ->where('created_at', '>=', now()->subHour())
-                                                     ->count()
+            'today_checkins' => $todayCheckins,
+            'today_checkouts' => $todayCheckouts,
+            'active_visitors' => $activeVisitors,
+            'last_hour_checkins' => $lastHourCheckins
         ];
     }
 
     private function getTodayHourlyCheckins($eventId)
     {
-        return VisitorLog::getHourlyDistribution($eventId, now()->format('Y-m-d'));
+        return $this->getHourlyDistribution($eventId, now()->startOfDay(), now()->endOfDay());
     }
 
     private function getRegistrationTimeline($registrationId)
@@ -581,7 +754,7 @@ class VisitorLogController extends Controller
                     $log->registration->user->email,
                     $log->registration->event->name,
                     ucfirst($log->action),
-                    $log->formatted_created_at,
+                    $log->created_at->format('Y-m-d H:i:s'),
                     $log->duration_minutes ?? '',
                     $log->admin_note ?? '',
                     $log->creator->name ?? 'System',
@@ -601,35 +774,217 @@ class VisitorLogController extends Controller
     {
         // Implementation using Laravel Excel
         // return Excel::download(new VisitorLogsExport($logs), $filename . '.xlsx');
+        
+        // For now, fallback to CSV
+        return $this->exportToCsv($logs, $filename);
     }
 
     private function exportToPdf($logs, $filename)
     {
         // Implementation using DomPDF
-        // return PDF::loadView('exports.visitor-logs-pdf', compact('logs'))->download($filename . '.pdf');
+        // $pdf = PDF::loadView('exports.visitor-logs-pdf', compact('logs'));
+        // return $pdf->download($filename . '.pdf');
+        
+        // For now, fallback to CSV
+        return $this->exportToCsv($logs, $filename);
     }
 
     private function generateSummaryReport($eventId, $dateFrom, $dateTo)
     {
-        // Implementation for summary report generation
-        return [];
+        $dateFromCarbon = Carbon::parse($dateFrom);
+        $dateToCarbon = Carbon::parse($dateTo);
+        
+        $query = VisitorLog::query();
+        
+        if ($eventId) {
+            $query->whereHas('registration', function($q) use ($eventId) {
+                $q->where('event_id', $eventId);
+            });
+        }
+        
+        $query->whereBetween('created_at', [$dateFromCarbon, $dateToCarbon]);
+        
+        $totalLogs = (clone $query)->count();
+        $checkins = (clone $query)->where('action', 'checkin')->count();
+        $checkouts = (clone $query)->where('action', 'checkout')->count();
+        $uniqueVisitors = (clone $query)->distinct('registration_id')->count();
+        
+        $avgDuration = (clone $query)
+            ->where('action', 'checkout')
+            ->whereNotNull('duration_minutes')
+            ->avg('duration_minutes');
+            
+        $totalDuration = (clone $query)
+            ->where('action', 'checkout')
+            ->whereNotNull('duration_minutes')
+            ->sum('duration_minutes');
+
+        return [
+            'period' => [
+                'from' => $dateFromCarbon->format('M d, Y'),
+                'to' => $dateToCarbon->format('M d, Y'),
+                'days' => $dateFromCarbon->diffInDays($dateToCarbon) + 1
+            ],
+            'totals' => [
+                'total_logs' => $totalLogs,
+                'total_checkins' => $checkins,
+                'total_checkouts' => $checkouts,
+                'unique_visitors' => $uniqueVisitors,
+                'completion_rate' => $checkins > 0 ? round(($checkouts / $checkins) * 100, 2) : 0
+            ],
+            'duration' => [
+                'total_minutes' => $totalDuration ?? 0,
+                'total_hours' => $totalDuration ? round($totalDuration / 60, 2) : 0,
+                'average_minutes' => $avgDuration ? round($avgDuration, 2) : 0,
+                'average_hours' => $avgDuration ? round($avgDuration / 60, 2) : 0
+            ],
+            'daily_averages' => [
+                'logs_per_day' => round($totalLogs / ($dateFromCarbon->diffInDays($dateToCarbon) + 1), 2),
+                'checkins_per_day' => round($checkins / ($dateFromCarbon->diffInDays($dateToCarbon) + 1), 2),
+                'visitors_per_day' => round($uniqueVisitors / ($dateFromCarbon->diffInDays($dateToCarbon) + 1), 2)
+            ]
+        ];
     }
 
     private function generateDetailedReport($eventId, $dateFrom, $dateTo)
     {
-        // Implementation for detailed report generation
-        return [];
+        $summary = $this->generateSummaryReport($eventId, $dateFrom, $dateTo);
+        $hourlyDistribution = $this->getHourlyDistribution($eventId, Carbon::parse($dateFrom), Carbon::parse($dateTo));
+        $dailyTrends = $this->getDailyTrends($eventId, Carbon::parse($dateFrom), Carbon::parse($dateTo));
+        $durationAnalysis = $this->getDurationAnalysis($eventId, Carbon::parse($dateFrom), Carbon::parse($dateTo));
+        
+        // Top visitors by frequency
+        $topVisitors = VisitorLog::selectRaw('
+                registration_id,
+                COUNT(*) as visit_count,
+                AVG(duration_minutes) as avg_duration
+            ')
+            ->with(['registration.user', 'registration.event'])
+            ->whereBetween('created_at', [Carbon::parse($dateFrom), Carbon::parse($dateTo)])
+            ->when($eventId, function($q) use ($eventId) {
+                $q->whereHas('registration', function($subQ) use ($eventId) {
+                    $subQ->where('event_id', $eventId);
+                });
+            })
+            ->groupBy('registration_id')
+            ->orderBy('visit_count', 'desc')
+            ->limit(10)
+            ->get();
+
+        return [
+            'summary' => $summary,
+            'hourly_distribution' => $hourlyDistribution,
+            'daily_trends' => $dailyTrends,
+            'duration_analysis' => $durationAnalysis,
+            'top_visitors' => $topVisitors,
+            'peak_hours' => $this->getPeakTimes($eventId, Carbon::parse($dateFrom), Carbon::parse($dateTo))
+        ];
     }
 
     private function generateAttendanceReport($eventId, $dateFrom, $dateTo)
     {
-        // Implementation for attendance report generation
-        return [];
+        $query = VisitorLog::with(['registration.user', 'registration.event'])
+            ->whereBetween('created_at', [Carbon::parse($dateFrom), Carbon::parse($dateTo)]);
+            
+        if ($eventId) {
+            $query->whereHas('registration', function($q) use ($eventId) {
+                $q->where('event_id', $eventId);
+            });
+        }
+
+        $attendanceData = $query->get()->groupBy(function($log) {
+            return $log->created_at->format('Y-m-d');
+        });
+
+        $dailyAttendance = [];
+        foreach ($attendanceData as $date => $logs) {
+            $checkins = $logs->where('action', 'checkin')->count();
+            $checkouts = $logs->where('action', 'checkout')->count();
+            $uniqueVisitors = $logs->unique('registration_id')->count();
+            
+            $dailyAttendance[$date] = [
+                'date' => $date,
+                'checkins' => $checkins,
+                'checkouts' => $checkouts,
+                'unique_visitors' => $uniqueVisitors,
+                'completion_rate' => $checkins > 0 ? round(($checkouts / $checkins) * 100, 2) : 0
+            ];
+        }
+
+        // Fill missing dates with zeros
+        $period = new \DatePeriod(
+            Carbon::parse($dateFrom),
+            new \DateInterval('P1D'),
+            Carbon::parse($dateTo)->addDay()
+        );
+
+        foreach ($period as $date) {
+            $dateStr = $date->format('Y-m-d');
+            if (!isset($dailyAttendance[$dateStr])) {
+                $dailyAttendance[$dateStr] = [
+                    'date' => $dateStr,
+                    'checkins' => 0,
+                    'checkouts' => 0,
+                    'unique_visitors' => 0,
+                    'completion_rate' => 0
+                ];
+            }
+        }
+
+        ksort($dailyAttendance);
+
+        return [
+            'daily_attendance' => array_values($dailyAttendance),
+            'summary' => $this->generateSummaryReport($eventId, $dateFrom, $dateTo)
+        ];
     }
 
     private function generateDurationReport($eventId, $dateFrom, $dateTo)
     {
-        // Implementation for duration report generation
-        return [];
+        $durationAnalysis = $this->getDurationAnalysis($eventId, Carbon::parse($dateFrom), Carbon::parse($dateTo));
+        
+        // Get detailed duration data
+        $query = VisitorLog::with(['registration.user', 'registration.event'])
+            ->where('action', 'checkout')
+            ->whereNotNull('duration_minutes')
+            ->whereBetween('created_at', [Carbon::parse($dateFrom), Carbon::parse($dateTo)]);
+            
+        if ($eventId) {
+            $query->whereHas('registration', function($q) use ($eventId) {
+                $q->where('event_id', $eventId);
+            });
+        }
+
+        $durationLogs = $query->orderBy('duration_minutes', 'desc')->get();
+        
+        // Duration by day of week
+        $durationByDayOfWeek = $durationLogs->groupBy(function($log) {
+            return $log->created_at->format('l'); // Full day name
+        })->map(function($logs) {
+            return [
+                'count' => $logs->count(),
+                'avg_duration' => round($logs->avg('duration_minutes'), 2),
+                'total_duration' => $logs->sum('duration_minutes')
+            ];
+        });
+
+        // Duration by hour
+        $durationByHour = $durationLogs->groupBy(function($log) {
+            return $log->created_at->format('H');
+        })->map(function($logs) {
+            return [
+                'count' => $logs->count(),
+                'avg_duration' => round($logs->avg('duration_minutes'), 2),
+                'total_duration' => $logs->sum('duration_minutes')
+            ];
+        });
+
+        return [
+            'analysis' => $durationAnalysis,
+            'by_day_of_week' => $durationByDayOfWeek,
+            'by_hour' => $durationByHour,
+            'detailed_logs' => $durationLogs->take(50), // Top 50 by duration
+            'summary' => $this->generateSummaryReport($eventId, $dateFrom, $dateTo)
+        ];
     }
 }

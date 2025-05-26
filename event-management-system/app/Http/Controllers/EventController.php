@@ -23,12 +23,6 @@ class EventController extends Controller
         return view('events.index', compact('events'));
     }
 
-    public function create()
-    {
-        $venues = Venue::all();
-        $categories = Category::all();
-        return view('events.create', compact('venues', 'categories'));
-    }
 
     public function store(Request $request)
     {

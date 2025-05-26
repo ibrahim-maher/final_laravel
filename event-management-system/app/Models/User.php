@@ -55,22 +55,6 @@ class User extends Authenticatable
             'is_active' => 'boolean',
         ];
     }
-public function handle(Request $request, Closure $next): Response
-{
-    if (! auth()->check()) {
-        return redirect()->route('login');
-    }
-
-    $user = auth()->user();
-
-    // Dump role and length to the console (and stop execution)
-    dd([
-        'role_value'  => $user->role,
-        'role_length' => mb_strlen($user->role),
-    ]);
-
-    return $next($request);
-}
 
     /**
      * Role constants
@@ -93,7 +77,7 @@ public function handle(Request $request, Closure $next): Response
         ];
     }
 
-        /**
+    /**
      * Check if user has given role or any of multiple roles.
      *
      * @param  string|array  $roles
@@ -112,7 +96,7 @@ public function handle(Request $request, Closure $next): Response
      */
     public function isAdmin()
     {
-    return trim(strtoupper($this->role)) === self::ROLE_ADMIN;
+        return trim(strtoupper($this->role)) === self::ROLE_ADMIN;
     }
 
     public function isEventManager()
@@ -207,6 +191,18 @@ public function handle(Request $request, Closure $next): Response
         };
     }
 
+    public function isStaff()
+{
+    return in_array($this->role, ['ADMIN', 'SUPER_ADMIN', 'EVENT_MANAGER', 'USHER']);
+}
+
+/**
+ * Check if user can manage visitor logs
+ */
+public function canManageVisitorLogs()
+{
+    return $this->isAdmin() || $this->isStaff();
+}
     /**
      * Get status badge class
      */
@@ -318,6 +314,11 @@ public function handle(Request $request, Closure $next): Response
     {
         return $this->hasMany(VisitorLog::class, 'created_by');
     }
+public function updatedLogs()
+{
+    return $this->hasMany(VisitorLog::class, 'updated_by');
+}
+
 
     /**
      * Get user's recent activity

@@ -484,23 +484,7 @@ function showScanResult(data, type) {
 }
 
 function updateStats() {
-    fetch('{{ route("checkin.stats") }}')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('today-checkins').textContent = data.today_checkins || 0;
-            document.getElementById('today-checkouts').textContent = data.today_checkouts || 0;
-            document.getElementById('active-visitors').textContent = data.active_visitors || 0;
-            
-            // Update completion rate
-            const completionRate = data.today_checkins > 0 ? 
-                Math.round((data.today_checkouts / data.today_checkins) * 100) : 0;
-            document.getElementById('completion-rate').textContent = completionRate + '%';
-            
-            // Update average duration
-            const avgDuration = data.average_duration ? Math.round(data.average_duration) : 0;
-            document.getElementById('avg-duration').textContent = avgDuration + 'm';
-        })
-        .catch(error => console.error('Stats update error:', error));
+
 }
 
 function addToRecentActivity(activityData) {
@@ -553,43 +537,6 @@ function initializeAnalytics() {
 }
 
 function loadHourlyChart() {
-    fetch('{{ route("checkin.hourly-analytics") }}')
-        .then(response => response.json())
-        .then(data => {
-            const ctx = document.getElementById('hourly-chart').getContext('2d');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.labels,
-                    datasets: [{
-                        label: 'Check-ins by Hour',
-                        data: data.data,
-                        borderColor: 'rgb(59, 130, 246)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.3,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
-                    }
-                }
-            });
-        })
-        .catch(error => console.error('Analytics loading error:', error));
 }
 
 // Event Listeners

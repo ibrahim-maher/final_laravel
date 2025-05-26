@@ -45,6 +45,10 @@ class Event extends Model
     {
         return $this->hasMany(RegistrationField::class)->orderBy('order');
     }
+       public function getOrderedRegistrationFields()
+    {
+        return $this->registrationFields()->ordered()->get();
+    }
 
     public function assignedUsers()
     {

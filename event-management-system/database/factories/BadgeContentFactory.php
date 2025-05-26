@@ -6,6 +6,8 @@ namespace Database\Factories;
 use App\Models\BadgeContent;
 use App\Models\BadgeTemplate;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Models\User;  // add this
+
 
 class BadgeContentFactory extends Factory
 {
@@ -25,6 +27,7 @@ class BadgeContentFactory extends Factory
             'is_italic'    => $this->faker->boolean(10),
             'image_width'  => $this->faker->randomFloat(2, 1, 5),
             'image_height' => $this->faker->randomFloat(2, 1, 5),
+            'created_by' => User::factory(),
         ];
     }
 }

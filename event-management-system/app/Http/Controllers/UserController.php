@@ -12,12 +12,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\UserWelcomeEmail;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;  
 
 
 class UserController extends Controller
 {
-        use AuthorizesRequests;
 
     public function index(Request $request)
     {
@@ -67,7 +65,7 @@ class UserController extends Controller
         // Load relationships and counts
         $users = $query->withCount(['registrations', 'assignedEvents'])
                       ->with(['assignedEvents' => function($q) {
-                          $q->select('id', 'name')->limit(3);
+                    $q->select('events.id', 'events.name')->limit(3);
                       }])
                       ->paginate($request->input('per_page', 15))
                       ->withQueryString();
@@ -88,7 +86,6 @@ class UserController extends Controller
 
     public function create()
     {
-        $this->authorize('create', User::class);
 
         $roles = User::getRoles();
         $events = Event::where('is_active', true)->orderBy('name')->get();
@@ -99,7 +96,6 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorize('create', User::class);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -133,13 +129,13 @@ class UserController extends Controller
             }
 
             // Send welcome email if requested
-            if ($request->boolean('send_welcome_email')) {
-                try {
-                    Mail::to($user->email)->send(new UserWelcomeEmail($user, $request->password));
-                } catch (\Exception $e) {
-                    logger()->error('Failed to send welcome email: ' . $e->getMessage());
-                }
-            }
+            //if ($request->boolean('send_welcome_email')) {
+            //    try {
+           //         Mail::to($user->email)->send(new UserWelcomeEmail($user, $request->password));
+           //     } catch (\Exception $e) {
+            //        logger()->error('Failed to send welcome email: ' . $e->getMessage());
+           //     }
+           // }
 
             DB::commit();
 
@@ -156,7 +152,6 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        $this->authorize('view', $user);
 
         $user->load([
             'assignedEvents.venue',
@@ -192,7 +187,6 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        $this->authorize('update', $user);
 
         $roles = User::getRoles();
         $events = Event::where('is_active', true)->orderBy('name')->get();
@@ -205,7 +199,6 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $this->authorize('update', $user);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -262,7 +255,6 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
-        $this->authorize('delete', $user);
 
         // Prevent self-deletion
         if ($user->id === auth()->id()) {
@@ -299,7 +291,6 @@ class UserController extends Controller
 
     public function bulkAction(Request $request)
     {
-        $this->authorize('update', User::class);
 
         $request->validate([
             'action' => 'required|in:activate,deactivate,assign_events,remove_events,delete',
@@ -368,7 +359,6 @@ class UserController extends Controller
 
     public function export(Request $request)
     {
-        $this->authorize('viewAny', User::class);
 
         $query = User::withCount(['registrations', 'assignedEvents']);
 
@@ -414,7 +404,6 @@ class UserController extends Controller
 
     public function assignEvents(Request $request, User $user)
     {
-        $this->authorize('update', $user);
 
         $request->validate([
             'event_ids' => 'required|array|min:1',
@@ -432,7 +421,6 @@ class UserController extends Controller
 
     public function removeEvent(Request $request, User $user, Event $event)
     {
-        $this->authorize('update', $user);
 
         $user->assignedEvents()->detach($event->id);
 
