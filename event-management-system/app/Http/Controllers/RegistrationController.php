@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\RegistrationField;
 use App\Models\BadgeTemplate;
 use App\Models\BadgeContent;
+use App\Services\BadgePrintingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,11 +22,15 @@ class RegistrationController extends Controller
 {
     use AuthorizesRequests;
 
+    protected $badgePrintingService;
+
+    public function __construct(?BadgePrintingService $badgePrintingService = null)
+    {
+        $this->badgePrintingService = $badgePrintingService;
+    }
+
     public function index(Request $request)
     {
-        // For simple setup, just check if user is authenticated
-        // $this->authorize('viewAny', Registration::class);
-
         $query = Registration::with(['user', 'event', 'ticketType']);
 
         // Search functionality
@@ -69,213 +74,210 @@ class RegistrationController extends Controller
 
     public function create()
     {
-        // $this->authorize('create', Registration::class);
-
         $events = Event::where('is_active', true)->orderBy('name')->get();
         $users = User::orderBy('name')->get();
         
         return view('registrations.create', compact('events', 'users'));
     }
 
-public function store(Request $request)
-{
-    // Basic validation first
-    $request->validate([
-        'event_id' => 'required|exists:events,id',
-        'user_id' => 'nullable|exists:users,id',
-        'ticket_type_id' => 'nullable|exists:tickets,id',
-    ]);
+    public function store(Request $request)
+    {
+        // Basic validation first
+        $request->validate([
+            'event_id' => 'required|exists:events,id',
+            'user_id' => 'nullable|exists:users,id',
+            'ticket_type_id' => 'nullable|exists:tickets,id',
+        ]);
 
-    $event = Event::findOrFail($request->event_id);
-    
-    // Validate ticket belongs to event (simplified)
-    if ($request->ticket_type_id) {
-        $ticket = Ticket::where('id', $request->ticket_type_id)
-                       ->where('event_id', $event->id)
-                       ->first();
+        $event = Event::findOrFail($request->event_id);
         
-        if (!$ticket) {
-            throw ValidationException::withMessages([
-                'ticket_type_id' => 'Selected ticket does not belong to this event.'
-            ]);
-        }
-        
-        // Simplified availability check
-        if (!$ticket->is_active) {
-            throw ValidationException::withMessages([
-                'ticket_type_id' => 'This ticket type is currently inactive.'
-            ]);
-        }
-        
-        // Check capacity if it exists and is set
-        if (isset($ticket->capacity) && $ticket->capacity > 0) {
-            $currentRegistrations = Registration::where('ticket_type_id', $ticket->id)
-                                               ->where('status', '!=', 'cancelled')
-                                               ->count();
+        // Validate ticket belongs to event (simplified)
+        if ($request->ticket_type_id) {
+            $ticket = Ticket::where('id', $request->ticket_type_id)
+                           ->where('event_id', $event->id)
+                           ->first();
             
-            if ($currentRegistrations >= $ticket->capacity) {
+            if (!$ticket) {
                 throw ValidationException::withMessages([
-                    'ticket_type_id' => 'This ticket type is fully booked.'
+                    'ticket_type_id' => 'Selected ticket does not belong to this event.'
                 ]);
             }
-        }
-    }
-
-    // Get dynamic fields for the event
-    $registrationFields = $event->registrationFields()->ordered()->get();
-    $registrationData = [];
-    $validationRules = [];
-
-    // Build validation rules for dynamic fields
-    foreach ($registrationFields as $field) {
-        $fieldKey = Str::slug($field->field_name, '_');
-        
-        // Build validation rules based on field type and requirements
-        $rules = [];
-        if ($field->is_required) {
-            $rules[] = 'required';
-        } else {
-            $rules[] = 'nullable';
-        }
-
-        switch ($field->field_type) {
-            case 'email':
-                $rules[] = 'email';
-                break;
-            case 'number':
-                $rules[] = 'numeric';
-                break;
-            case 'date':
-                $rules[] = 'date';
-                break;
-            case 'url':
-                $rules[] = 'url';
-                break;
-            case 'dropdown':
-            case 'radio':
-                if (!empty($field->options_array)) {
-                    $rules[] = 'in:' . implode(',', $field->options_array);
+            
+            // Simplified availability check
+            if (!$ticket->is_active) {
+                throw ValidationException::withMessages([
+                    'ticket_type_id' => 'This ticket type is currently inactive.'
+                ]);
+            }
+            
+            // Check capacity if it exists and is set
+            if (isset($ticket->capacity) && $ticket->capacity > 0) {
+                $currentRegistrations = Registration::where('ticket_type_id', $ticket->id)
+                                                   ->where('status', '!=', 'cancelled')
+                                                   ->count();
+                
+                if ($currentRegistrations >= $ticket->capacity) {
+                    throw ValidationException::withMessages([
+                        'ticket_type_id' => 'This ticket type is fully booked.'
+                    ]);
                 }
-                break;
-            case 'checkbox':
-                if (!empty($field->options_array)) {
-                    $rules[] = 'array';
-                } else {
-                    $rules[] = 'nullable';
-                }
-                break;
-            default:
-                if ($field->is_required) {
-                    $rules[] = 'string|max:255';
-                } else {
-                    $rules[] = 'nullable|string|max:255';
-                }
-                break;
+            }
         }
 
-        $validationRules[$fieldKey] = implode('|', $rules);
-    }
+        // Get dynamic fields for the event
+        $registrationFields = $event->registrationFields()->ordered()->get();
+        $registrationData = [];
+        $validationRules = [];
 
-    // Validate dynamic fields
-    if (!empty($validationRules)) {
+        // Build validation rules for dynamic fields
+        foreach ($registrationFields as $field) {
+            $fieldKey = Str::slug($field->field_name, '_');
+            
+            // Build validation rules based on field type and requirements
+            $rules = [];
+            if ($field->is_required) {
+                $rules[] = 'required';
+            } else {
+                $rules[] = 'nullable';
+            }
+
+            switch ($field->field_type) {
+                case 'email':
+                    $rules[] = 'email';
+                    break;
+                case 'number':
+                    $rules[] = 'numeric';
+                    break;
+                case 'date':
+                    $rules[] = 'date';
+                    break;
+                case 'url':
+                    $rules[] = 'url';
+                    break;
+                case 'dropdown':
+                case 'radio':
+                    if (!empty($field->options_array)) {
+                        $rules[] = 'in:' . implode(',', $field->options_array);
+                    }
+                    break;
+                case 'checkbox':
+                    if (!empty($field->options_array)) {
+                        $rules[] = 'array';
+                    } else {
+                        $rules[] = 'nullable';
+                    }
+                    break;
+                default:
+                    if ($field->is_required) {
+                        $rules[] = 'string|max:255';
+                    } else {
+                        $rules[] = 'nullable|string|max:255';
+                    }
+                    break;
+            }
+
+            $validationRules[$fieldKey] = implode('|', $rules);
+        }
+
+        // Validate dynamic fields
+        if (!empty($validationRules)) {
+            try {
+                $request->validate($validationRules);
+            } catch (ValidationException $e) {
+                Log::error('Dynamic field validation failed', [
+                    'rules' => $validationRules,
+                    'input' => $request->all(),
+                    'errors' => $e->errors()
+                ]);
+                throw $e;
+            }
+        }
+
+        // Collect dynamic field data
+        foreach ($registrationFields as $field) {
+            $fieldKey = Str::slug($field->field_name, '_');
+            $value = $request->input($fieldKey);
+            
+            // Handle different field types
+            if ($field->field_type === 'checkbox' && is_array($value)) {
+                $registrationData[$field->field_name] = $value;
+            } elseif ($field->field_type === 'checkbox' && $value === '1') {
+                $registrationData[$field->field_name] = true;
+            } else {
+                $registrationData[$field->field_name] = $value;
+            }
+        }
+
         try {
-            $request->validate($validationRules);
+            DB::transaction(function () use ($request, $event, $registrationData) {
+                // Create or get user
+                if ($request->user_id) {
+                    $user = User::findOrFail($request->user_id);
+                } else {
+                    // Create new user from registration data
+                    $user = $this->createUserFromRegistrationData($registrationData, $request);
+                }
+
+                // Check if user is already registered for this event
+                $existingRegistration = Registration::where('event_id', $event->id)
+                                                    ->where('user_id', $user->id)
+                                                    ->first();
+                
+                if ($existingRegistration) {
+                    throw ValidationException::withMessages([
+                        'user_id' => 'User is already registered for this event.'
+                    ]);
+                }
+
+                // Create registration
+                $registration = Registration::create([
+                    'event_id' => $event->id,
+                    'user_id' => $user->id,
+                    'ticket_type_id' => $request->ticket_type_id,
+                    'registration_data' => $registrationData,
+                    'status' => 'confirmed',
+                ]);
+
+                session(['last_registration_id' => $registration->id]);
+            });
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Registration created successfully',
+                    'registration_id' => session('last_registration_id')
+                ]);
+            }
+
+            return redirect()->route('registrations.index')
+                            ->with('success', 'Registration created successfully');
+                            
         } catch (ValidationException $e) {
-            Log::error('Dynamic field validation failed', [
-                'rules' => $validationRules,
-                'input' => $request->all(),
-                'errors' => $e->errors()
+            Log::error('Registration validation failed', [
+                'errors' => $e->errors(),
+                'input' => $request->all()
             ]);
             throw $e;
-        }
-    }
-
-    // Collect dynamic field data
-    foreach ($registrationFields as $field) {
-        $fieldKey = Str::slug($field->field_name, '_');
-        $value = $request->input($fieldKey);
-        
-        // Handle different field types
-        if ($field->field_type === 'checkbox' && is_array($value)) {
-            $registrationData[$field->field_name] = $value;
-        } elseif ($field->field_type === 'checkbox' && $value === '1') {
-            $registrationData[$field->field_name] = true;
-        } else {
-            $registrationData[$field->field_name] = $value;
-        }
-    }
-
-    try {
-        DB::transaction(function () use ($request, $event, $registrationData) {
-            // Create or get user
-            if ($request->user_id) {
-                $user = User::findOrFail($request->user_id);
-            } else {
-                // Create new user from registration data
-                $user = $this->createUserFromRegistrationData($registrationData, $request);
-            }
-
-            // Check if user is already registered for this event
-            $existingRegistration = Registration::where('event_id', $event->id)
-                                                ->where('user_id', $user->id)
-                                                ->first();
+        } catch (\Exception $e) {
+            Log::error('Registration creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'input' => $request->all()
+            ]);
             
-            if ($existingRegistration) {
-                throw ValidationException::withMessages([
-                    'user_id' => 'User is already registered for this event.'
-                ]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Registration failed: ' . $e->getMessage()
+                ], 500);
             }
 
-            // Create registration
-            $registration = Registration::create([
-                'event_id' => $event->id,
-                'user_id' => $user->id,
-                'ticket_type_id' => $request->ticket_type_id,
-                'registration_data' => $registrationData,
-                'status' => 'confirmed',
-            ]);
-
-            session(['last_registration_id' => $registration->id]);
-        });
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Registration created successfully',
-                'registration_id' => session('last_registration_id')
-            ]);
+            return back()->withErrors(['error' => 'Registration failed: ' . $e->getMessage()])->withInput();
         }
-
-        return redirect()->route('registrations.index')
-                        ->with('success', 'Registration created successfully');
-                        
-    } catch (ValidationException $e) {
-        Log::error('Registration validation failed', [
-            'errors' => $e->errors(),
-            'input' => $request->all()
-        ]);
-        throw $e;
-    } catch (\Exception $e) {
-        Log::error('Registration creation failed', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'input' => $request->all()
-        ]);
-        
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed: ' . $e->getMessage()
-            ], 500);
-        }
-
-        return back()->withErrors(['error' => 'Registration failed: ' . $e->getMessage()])->withInput();
     }
-}
+
     public function show(Registration $registration)
     {
-        // $this->authorize('view', $registration);
-
         $registration->load(['user', 'event', 'ticketType', 'qrCode']);
         
         return view('registrations.show', compact('registration'));
@@ -283,8 +285,6 @@ public function store(Request $request)
 
     public function edit(Registration $registration)
     {
-        // $this->authorize('update', $registration);
-
         $events = Event::orderBy('name')->get();
         $users = User::orderBy('name')->get();
         $tickets = Ticket::where('event_id', $registration->event_id)->get();
@@ -294,8 +294,6 @@ public function store(Request $request)
 
     public function update(Request $request, Registration $registration)
     {
-        // $this->authorize('update', $registration);
-
         $request->validate([
             'event_id' => 'required|exists:events,id',
             'user_id' => 'required|exists:users,id',
@@ -385,8 +383,6 @@ public function store(Request $request)
 
     public function destroy(Registration $registration)
     {
-        // $this->authorize('delete', $registration);
-
         $registration->delete();
 
         if (request()->expectsJson()) {
@@ -399,8 +395,6 @@ public function store(Request $request)
         return redirect()->route('registrations.index')
                         ->with('success', 'Registration deleted successfully');
     }
-
-    
 
     public function getRegistrationFields(Event $event)
     {
@@ -420,8 +414,6 @@ public function store(Request $request)
     public function bulkAction(Request $request)
     {
         try {
-            // $this->authorize('update', Registration::class);
-
             $request->validate([
                 'action' => 'required|in:confirm,cancel,delete',
                 'registration_ids' => 'required|array',
@@ -488,8 +480,6 @@ public function store(Request $request)
 
     public function export(Request $request)
     {
-        // $this->authorize('viewAny', Registration::class);
-
         $query = Registration::with(['user', 'event', 'ticketType']);
 
         // Apply same filters as index
@@ -732,107 +722,6 @@ public function store(Request $request)
         }
     }
 
-    // Add these methods to your RegistrationController
-
-public function printBadge(Registration $registration)
-{
-    $registration->load(['user', 'event', 'ticketType', 'qrCode']);
-    
-    if (!$registration->ticket_type_id) {
-        return back()->with('error', 'No ticket type assigned to this registration.');
-    }
-    
-    $badgeTemplate = BadgeTemplate::where('ticket_id', $registration->ticket_type_id)
-                                 ->with('contents')
-                                 ->first();
-    
-    if (!$badgeTemplate) {
-        return back()->with('error', 'No badge template configured for this ticket type.');
-    }
-    
-    // Ensure QR code exists
-    if (!$registration->qrCode) {
-        $registration->generateQRCode();
-        $registration->refresh();
-    }
-    
-    return view('registrations.print-badge', compact('registration', 'badgeTemplate'));
-}
-
-public function bulkPrintBadges(Request $request)
-{
-    $request->validate([
-        'registration_ids' => 'required|array',
-        'registration_ids.*' => 'exists:registrations,id'
-    ]);
-    
-    $registrations = Registration::with(['user', 'event', 'ticketType', 'qrCode'])
-                                ->whereIn('id', $request->registration_ids)
-                                ->whereNotNull('ticket_type_id')
-                                ->get();
-    
-    if ($registrations->isEmpty()) {
-        return back()->with('error', 'No valid registrations found for badge printing.');
-    }
-    
-    // Group registrations by ticket type to get their templates
-    $groupedRegistrations = $registrations->groupBy('ticket_type_id');
-    $badgeData = [];
-    
-    foreach ($groupedRegistrations as $ticketTypeId => $ticketRegistrations) {
-        $badgeTemplate = BadgeTemplate::where('ticket_id', $ticketTypeId)
-                                     ->with('contents')
-                                     ->first();
-        
-        if ($badgeTemplate) {
-            foreach ($ticketRegistrations as $registration) {
-                // Ensure QR code exists
-                if (!$registration->qrCode) {
-                    $registration->generateQRCode();
-                    $registration->refresh();
-                }
-                
-                $badgeData[] = [
-                    'registration' => $registration,
-                    'template' => $badgeTemplate
-                ];
-            }
-        }
-    }
-    
-    if (empty($badgeData)) {
-        return back()->with('error', 'No badge templates found for selected registrations.');
-    }
-    
-    return view('registrations.bulk-print-badges', compact('badgeData'));
-}
-
-// Add this method to handle AJAX badge preview
-public function previewBadge(Registration $registration)
-{
-    $registration->load(['user', 'event', 'ticketType', 'qrCode']);
-    
-    if (!$registration->ticket_type_id) {
-        return response()->json(['error' => 'No ticket type assigned'], 400);
-    }
-    
-    $badgeTemplate = BadgeTemplate::where('ticket_id', $registration->ticket_type_id)
-                                 ->with('contents')
-                                 ->first();
-    
-    if (!$badgeTemplate) {
-        return response()->json(['error' => 'No badge template found'], 400);
-    }
-    
-    // Generate preview HTML
-    $previewHtml = view('registrations.badge-preview', compact('registration', 'badgeTemplate'))->render();
-    
-    return response()->json([
-        'html' => $previewHtml,
-        'template' => $badgeTemplate->toArray()
-    ]);
-}
-
     public function publicRegister(Request $request)
     {
         $events = Event::where('is_active', true)
@@ -977,201 +866,692 @@ public function previewBadge(Registration $registration)
         return view('registrations.success', compact('registration'));
     }
 
-   protected function createUserFromRegistrationData(array $registrationData, Request $request = null)
-{
-    // Try different common field names for email
-    $email = null;
-    $possibleEmailFields = [
-        'Email', 'email', 'Email Address', 'email_address', 
-        'e_mail', 'e-mail', 'user_email', 'contact_email'
-    ];
-    
-    foreach ($possibleEmailFields as $field) {
-        if (!empty($registrationData[$field])) {
-            $email = $registrationData[$field];
-            break;
-        }
-    }
-    
-    // If not found in registration data, check request directly
-    if (!$email && $request) {
+    protected function createUserFromRegistrationData(array $registrationData, Request $request = null)
+    {
+        // Try different common field names for email
+        $email = null;
+        $possibleEmailFields = [
+            'Email', 'email', 'Email Address', 'email_address', 
+            'e_mail', 'e-mail', 'user_email', 'contact_email'
+        ];
+        
         foreach ($possibleEmailFields as $field) {
-            $fieldKey = Str::slug($field, '_');
-            if ($request->filled($fieldKey)) {
-                $email = $request->input($fieldKey);
+            if (!empty($registrationData[$field])) {
+                $email = $registrationData[$field];
                 break;
             }
         }
-    }
-    
-    if (!$email) {
-        Log::error('Email not found in registration data', [
-            'registration_data' => $registrationData,
-            'request_data' => $request ? $request->all() : null
-        ]);
-        throw ValidationException::withMessages(['email' => 'Email is required for registration']);
-    }
-
-    // Try different common field names for name components
-    $firstName = $registrationData['First Name'] ?? 
-                 $registrationData['first_name'] ?? 
-                 $registrationData['fname'] ?? 
-                 $registrationData['given_name'] ?? '';
-    
-    $lastName = $registrationData['Last Name'] ?? 
-                $registrationData['last_name'] ?? 
-                $registrationData['lname'] ?? 
-                $registrationData['family_name'] ?? '';
-    
-    $fullName = $registrationData['Full Name'] ?? 
-                $registrationData['full_name'] ?? 
-                $registrationData['Name'] ?? 
-                $registrationData['name'] ?? '';
-    
-    $phone = $registrationData['Phone Number'] ?? 
-             $registrationData['phone_number'] ?? 
-             $registrationData['phone'] ?? 
-             $registrationData['Phone'] ?? 
-             $registrationData['mobile'] ?? 
-             $registrationData['Mobile'] ?? '';
-
-    // Check if user already exists
-    $user = User::where('email', $email)->first();
-    
-    if ($user) {
-        return $user;
-    }
-
-    // Determine the name to use
-    $name = '';
-    if (!empty($fullName)) {
-        $name = $fullName;
-    } elseif (!empty($firstName) || !empty($lastName)) {
-        $name = trim($firstName . ' ' . $lastName);
-    }
-    
-    // Fallback to email prefix if no name found
-    if (empty($name)) {
-        $name = explode('@', $email)[0];
-        $name = ucfirst(str_replace(['.', '_', '-'], ' ', $name));
-    }
-
-    try {
-        $user = User::create([
-            'name' => $name,
-            'email' => $email,
-            'phone' => $phone ?: null,
-            'password' => bcrypt(Str::random(12)), // Random password
-            'role' => 'visitor',
-            'email_verified_at' => now(), // Auto-verify for registration
-        ]);
         
-        Log::info('User created successfully', [
-            'user_id' => $user->id,
-            'email' => $email,
-            'name' => $name
-        ]);
+        // If not found in registration data, check request directly
+        if (!$email && $request) {
+            foreach ($possibleEmailFields as $field) {
+                $fieldKey = Str::slug($field, '_');
+                if ($request->filled($fieldKey)) {
+                    $email = $request->input($fieldKey);
+                    break;
+                }
+            }
+        }
         
-        return $user;
-    } catch (\Exception $e) {
-        Log::error('User creation failed', [
-            'error' => $e->getMessage(),
-            'email' => $email,
-            'name' => $name,
-            'registration_data' => $registrationData
-        ]);
-        throw new \Exception('Failed to create user: ' . $e->getMessage());
+        if (!$email) {
+            Log::error('Email not found in registration data', [
+                'registration_data' => $registrationData,
+                'request_data' => $request ? $request->all() : null
+            ]);
+            throw ValidationException::withMessages(['email' => 'Email is required for registration']);
+        }
+
+        // Try different common field names for name components
+        $firstName = $registrationData['First Name'] ?? 
+                     $registrationData['first_name'] ?? 
+                     $registrationData['fname'] ?? 
+                     $registrationData['given_name'] ?? '';
+        
+        $lastName = $registrationData['Last Name'] ?? 
+                    $registrationData['last_name'] ?? 
+                    $registrationData['lname'] ?? 
+                    $registrationData['family_name'] ?? '';
+        
+        $fullName = $registrationData['Full Name'] ?? 
+                    $registrationData['full_name'] ?? 
+                    $registrationData['Name'] ?? 
+                    $registrationData['name'] ?? '';
+        
+        $phone = $registrationData['Phone Number'] ?? 
+                 $registrationData['phone_number'] ?? 
+                 $registrationData['phone'] ?? 
+                 $registrationData['Phone'] ?? 
+                 $registrationData['mobile'] ?? 
+                 $registrationData['Mobile'] ?? '';
+
+        // Check if user already exists
+        $user = User::where('email', $email)->first();
+        
+        if ($user) {
+            return $user;
+        }
+
+        // Determine the name to use
+        $name = '';
+        if (!empty($fullName)) {
+            $name = $fullName;
+        } elseif (!empty($firstName) || !empty($lastName)) {
+            $name = trim($firstName . ' ' . $lastName);
+        }
+        
+        // Fallback to email prefix if no name found
+        if (empty($name)) {
+            $name = explode('@', $email)[0];
+            $name = ucfirst(str_replace(['.', '_', '-'], ' ', $name));
+        }
+
+        try {
+            $user = User::create([
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone ?: null,
+                'password' => bcrypt(Str::random(12)), // Random password
+                'role' => 'visitor',
+                'email_verified_at' => now(), // Auto-verify for registration
+            ]);
+            
+            Log::info('User created successfully', [
+                'user_id' => $user->id,
+                'email' => $email,
+                'name' => $name
+            ]);
+            
+            return $user;
+        } catch (\Exception $e) {
+            Log::error('User creation failed', [
+                'error' => $e->getMessage(),
+                'email' => $email,
+                'name' => $name,
+                'registration_data' => $registrationData
+            ]);
+            throw new \Exception('Failed to create user: ' . $e->getMessage());
+        }
     }
+
+    public function getTickets(Event $event)
+    {
+        $tickets = $event->tickets()->where('is_active', true)->get();
+        
+        return response()->json($tickets->map(function ($ticket) {
+            // Calculate available spaces
+            $currentRegistrations = Registration::where('ticket_type_id', $ticket->id)
+                                               ->where('status', '!=', 'cancelled')
+                                               ->count();
+            
+            $availableSpaces = null;
+            $isAvailable = true;
+            
+            if ($ticket->capacity && $ticket->capacity > 0) {
+                $availableSpaces = $ticket->capacity - $currentRegistrations;
+                $isAvailable = $availableSpaces > 0;
+            }
+            
+            return [
+                'id' => $ticket->id,
+                'name' => $ticket->name,
+                'price' => (float) $ticket->price,
+                'formatted_price' => number_format($ticket->price, 2),
+                'capacity' => $ticket->capacity,
+                'current_registrations' => $currentRegistrations,
+                'available_spaces' => $availableSpaces,
+                'is_available' => $isAvailable && $ticket->is_active,
+                'description' => $ticket->description ?? '',
+            ];
+        }));
+    }
+
+    // ===== BADGE PRINTING METHODS =====
+
+    /**
+     * Print single badge
+     */
+    public function printBadge(Registration $registration)
+    {
+        try {
+            // Use service if available, otherwise fallback
+            if ($this->badgePrintingService) {
+                $badgeData = $this->badgePrintingService->getBadgeData($registration);
+                
+                return view('badges.print-single', [
+                    'registration' => $badgeData['registration'],
+                    'badgeTemplate' => $badgeData['template'],
+                    'badgeData' => $badgeData['badge_data']
+                ]);
+            } else {
+                return $this->printBadgeFallback($registration);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Print badge error', [
+                'registration_id' => $registration->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->with('error', 'Failed to print badge: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Preview single badge (AJAX)
+     */
+    public function previewBadge(Registration $registration)
+    {
+        try {
+            // Use service if available, otherwise fallback
+            if ($this->badgePrintingService) {
+                $result = $this->badgePrintingService->generatePreviewHtml($registration);
+                
+                if (!$result['success']) {
+                    return response()->json(['error' => $result['error']], 400);
+                }
+                
+                return response()->json([
+                    'html' => $result['html'],
+                    'template' => $result['template']
+                ]);
+            } else {
+                return $this->previewBadgeFallback($registration);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Preview badge error', [
+                'registration_id' => $registration->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to generate preview: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk print badges
+     */
+    public function bulkPrintBadges(Request $request)
+    {
+        try {
+            $request->validate([
+                'registration_ids' => 'required|array',
+                'registration_ids.*' => 'exists:registrations,id'
+            ]);
+            
+            // Use service if available, otherwise fallback
+            if ($this->badgePrintingService) {
+                $badgeGroups = $this->badgePrintingService->getBulkBadgeData($request->registration_ids);
+                
+                return view('badges.print-bulk', compact('badgeGroups'));
+            } else {
+                return $this->bulkPrintBadgesFallback($request);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Bulk print badges error', [
+                'registration_ids' => $request->registration_ids ?? [],
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return back()->with('error', 'Failed to print badges: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Generate missing QR codes
+     */
+    public function generateMissingQrCodes(Request $request)
+    {
+        try {
+            Log::info('Generate QR codes request', [
+                'request_data' => $request->all()
+            ]);
+
+            $request->validate([
+                'registration_ids' => 'required|array',
+                'registration_ids.*' => 'exists:registrations,id'
+            ]);
+
+            // Use service if available, otherwise fallback
+            if ($this->badgePrintingService) {
+                $result = $this->badgePrintingService->generateMissingQrCodes($request->registration_ids);
+                return response()->json($result);
+            } else {
+                return $this->generateMissingQrCodesFallback($request);
+            }
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            Log::error('Generate QR codes failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate QR codes: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+  
+    // ===== FALLBACK METHODS (when service is not available) =====
+
+    /**
+     * Fallback method for printing single badge
+     */
+    protected function printBadgeFallback(Registration $registration)
+    {
+        $registration->load(['user', 'event', 'event.venue', 'ticketType', 'qrCode']);
+        
+        if (!$registration->ticket_type_id) {
+            return back()->with('error', 'No ticket type assigned to this registration.');
+        }
+        
+        $badgeTemplate = BadgeTemplate::where('ticket_id', $registration->ticket_type_id)
+                                     ->with('contents')
+                                     ->first();
+        
+        if (!$badgeTemplate) {
+            return back()->with('error', 'No badge template configured for this ticket type.');
+        }
+        
+        // Ensure QR code exists
+        if (!$registration->qrCode && method_exists($registration, 'generateQRCode')) {
+            try {
+                $registration->generateQRCode();
+                $registration->refresh();
+            } catch (\Exception $e) {
+                Log::error('Failed to generate QR code for registration ' . $registration->id);
+            }
+        }
+        
+        return view('registrations.print-badge', compact('registration', 'badgeTemplate'));
+    }
+
+    /**
+     * Fallback method for badge preview
+     */
+    protected function previewBadgeFallback(Registration $registration)
+    {
+        $registration->load(['user', 'event', 'event.venue', 'ticketType', 'qrCode']);
+        
+        if (!$registration->ticket_type_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No ticket type assigned to this registration'
+            ], 400);
+        }
+        
+        $badgeTemplate = BadgeTemplate::where('ticket_id', $registration->ticket_type_id)
+                                     ->with('contents')
+                                     ->first();
+        
+        if (!$badgeTemplate) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No badge template found for this ticket type'
+            ], 400);
+        }
+
+        // Basic preview generation
+        $html = view('registrations.badge-preview', [
+            'badgeTemplate' => $badgeTemplate,
+            'registration' => $registration
+        ])->render();
+        
+        return response()->json([
+            'success' => true,
+            'html' => $html,
+            'template' => $badgeTemplate->toArray()
+        ]);
+    }
+
+    /**
+     * Fallback method for bulk badge printing
+     */
+    protected function bulkPrintBadgesFallback(Request $request)
+{
+    $registrations = Registration::with(['user', 'event', 'ticketType', 'qrCode'])
+                                ->whereIn('id', $request->registration_ids)
+                                ->whereNotNull('ticket_type_id')
+                                ->get();
+    
+    if ($registrations->isEmpty()) {
+        return back()->with('error', 'No valid registrations found for badge printing.');
+    }
+    
+    // Group registrations by ticket type
+    $groupedRegistrations = $registrations->groupBy('ticket_type_id');
+    $badgeGroups = []; // Changed from $badgeData to $badgeGroups
+    
+    foreach ($groupedRegistrations as $ticketTypeId => $ticketRegistrations) {
+        $badgeTemplate = BadgeTemplate::where('ticket_id', $ticketTypeId)
+                                     ->with('contents')
+                                     ->first();
+        
+        if ($badgeTemplate) {
+            $registrationData = [];
+            $badgeDataList = [];
+            
+            foreach ($ticketRegistrations as $registration) {
+                // Generate QR code if missing
+                if (!$registration->qrCode && method_exists($registration, 'generateQRCode')) {
+                    try {
+                        $registration->generateQRCode();
+                        $registration->refresh();
+                    } catch (\Exception $e) {
+                        Log::error('Failed to generate QR code for registration ' . $registration->id . ': ' . $e->getMessage());
+                    }
+                }
+                
+                // Prepare badge data
+                $badgeData = [];
+                foreach ($badgeTemplate->contents as $content) {
+                    $badgeData[$content->field_name] = $this->getFieldDataFromContent($content, $registration);
+                }
+                
+                $registrationData[] = $registration;
+                $badgeDataList[] = $badgeData;
+            }
+            
+            $badgeGroups[] = [
+                'template' => $badgeTemplate,
+                'registrations' => collect($registrationData),
+                'badge_data' => $badgeDataList
+            ];
+        }
+    }
+    
+    if (empty($badgeGroups)) {
+        return back()->with('error', 'No badge templates found for selected registrations.');
+    }
+    
+    return view('badges.print-bulk', compact('badgeGroups')); // Changed view path
 }
 
-public function getTickets(Event $event)
+   protected function getFieldDataFromContent($content, $registration)
 {
-    $tickets = $event->tickets()->where('is_active', true)->get();
-    
-    return response()->json($tickets->map(function ($ticket) {
-        // Calculate available spaces
-        $currentRegistrations = Registration::where('ticket_type_id', $ticket->id)
-                                           ->where('status', '!=', 'cancelled')
-                                           ->count();
+    // Handle QR code field
+    if ($content->field_type === 'qr_code' || $content->field_name === 'qr_code') {
+        $qrImageData = null;
         
-        $availableSpaces = null;
-        $isAvailable = true;
-        
-        if ($ticket->capacity && $ticket->capacity > 0) {
-            $availableSpaces = $ticket->capacity - $currentRegistrations;
-            $isAvailable = $availableSpaces > 0;
+        if ($registration->qrCode && $registration->qrCode->qr_image) {
+            // Check if it's already base64 encoded
+            if (str_starts_with($registration->qrCode->qr_image, 'data:image')) {
+                $qrImageData = $registration->qrCode->qr_image;
+            } elseif (str_starts_with($registration->qrCode->qr_image, '/')) {
+                // It's a file path
+                $qrImageData = Storage::url($registration->qrCode->qr_image);
+            } else {
+                // It's base64 data
+                $qrImageData = 'data:image/png;base64,' . $registration->qrCode->qr_image;
+            }
         }
         
         return [
-            'id' => $ticket->id,
-            'name' => $ticket->name,
-            'price' => (float) $ticket->price,
-            'formatted_price' => number_format($ticket->price, 2),
-            'capacity' => $ticket->capacity,
-            'current_registrations' => $currentRegistrations,
-            'available_spaces' => $availableSpaces,
-            'is_available' => $isAvailable && $ticket->is_active,
-            'description' => $ticket->description ?? '',
-        ];
-    }));
-}
-
-public function generateMissingQrCodes(Request $request)
-{
-    $request->validate([
-        'registration_ids' => 'required|array',
-        'registration_ids.*' => 'exists:registrations,id'
-    ]);
-
-    $registrations = Registration::whereIn('id', $request->registration_ids)
-                                ->whereDoesntHave('qrCode')
-                                ->get();
-
-    $generated = 0;
-    foreach ($registrations as $registration) {
-        try {
-            $registration->generateQRCode();
-            $generated++;
-        } catch (\Exception $e) {
-            \Log::error('Failed to generate QR code for registration ' . $registration->id . ': ' . $e->getMessage());
-        }
-    }
-
-    return response()->json([
-        'success' => true,
-        'message' => "Generated {$generated} QR codes successfully",
-        'generated' => $generated
-    ]);
-}
-
-
-public function checkBadgeTemplates(Request $request)
-{
-    $request->validate([
-        'registration_ids' => 'required|array',
-        'registration_ids.*' => 'exists:registrations,id'
-    ]);
-
-    $registrations = Registration::with(['ticketType', 'ticketType.badgeTemplate'])
-                                ->whereIn('id', $request->registration_ids)
-                                ->get();
-
-    $results = [];
-    foreach ($registrations as $registration) {
-        $hasTemplate = $registration->ticketType && $registration->ticketType->badgeTemplate;
-        $results[] = [
+            'type' => 'qr_code',
+            'value' => $qrImageData,
             'registration_id' => $registration->id,
-            'user_name' => $registration->user->name,
-            'ticket_type' => $registration->ticketType->name ?? 'No ticket type',
-            'has_template' => $hasTemplate,
-            'can_print' => $hasTemplate
+            'width' => $content->image_width ?? 3,
+            'height' => $content->image_height ?? 3
         ];
     }
+    
+    // Handle text fields
+    $value = '';
+    
+    // Get value based on field mapping
+    switch ($content->field_name) {
+        case 'name':
+        case 'participant_name':
+            $value = $registration->user->name ?? '';
+            break;
+        case 'email':
+        case 'participant_email':
+            $value = $registration->user->email ?? '';
+            break;
+        case 'event_name':
+            $value = $registration->event->name ?? '';
+            break;
+        case 'ticket_type':
+            $value = $registration->ticketType->name ?? '';
+            break;
+        case 'company':
+        case 'organization':
+            $value = $registration->registration_data['company'] ?? 
+                    $registration->registration_data['organization'] ?? '';
+            break;
+        default:
+            // Check in registration data
+            if (isset($registration->registration_data[$content->field_name])) {
+                $value = $registration->registration_data[$content->field_name];
+            }
+            break;
+    }
+    
+    return [
+        'type' => 'text',
+        'value' => $value,
+        'font_size' => $content->font_size ?? 12,
+        'font_color' => $content->font_color ?? '#000000',
+        'font_family' => $content->font_family ?? 'Arial, sans-serif',
+        'is_bold' => $content->is_bold ?? false,
+        'is_italic' => $content->is_italic ?? false
+    ];
+}
 
-    return response()->json([
-        'success' => true,
-        'results' => $results,
-        'printable_count' => collect($results)->where('can_print', true)->count()
-    ]);
+    /**
+     * Fallback method for generating QR codes
+     */
+    protected function generateMissingQrCodesFallback(Request $request)
+    {
+        $registrations = Registration::whereIn('id', $request->registration_ids)
+                                    ->whereDoesntHave('qrCode')
+                                    ->get();
+
+        if ($registrations->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'generated' => 0,
+                'failed' => 0,
+                'errors' => [],
+                'message' => 'No QR codes needed to be generated'
+            ]);
+        }
+
+        $generated = 0;
+        $failed = 0;
+        $errors = [];
+
+        foreach ($registrations as $registration) {
+            try {
+                if (method_exists($registration, 'generateQRCode')) {
+                    $registration->generateQRCode();
+                    $generated++;
+                    Log::info("Generated QR code for registration {$registration->id}");
+                } else {
+                    $failed++;
+                    $errors[] = "Registration {$registration->id}: generateQRCode method not available";
+                }
+
+            } catch (\Exception $e) {
+                $failed++;
+                $errorMsg = "Registration {$registration->id}: " . $e->getMessage();
+                $errors[] = $errorMsg;
+                Log::error('Failed to generate QR code: ' . $errorMsg);
+            }
+        }
+
+        $message = "Generated {$generated} QR codes";
+        if ($failed > 0) {
+            $message .= ", {$failed} failed";
+        }
+
+        return response()->json([
+            'success' => true,
+            'generated' => $generated,
+            'failed' => $failed,
+            'errors' => $errors,
+            'message' => $message
+        ]);
+    }
+
+ public function checkBadgeTemplates(Request $request)
+{
+    try {
+        // Log the request for debugging
+        Log::info('Badge template check request', [
+            'registration_ids' => $request->registration_ids,
+            'request_all' => $request->all()
+        ]);
+
+        // Validate request
+        $request->validate([
+            'registration_ids' => 'required|array',
+            'registration_ids.*' => 'exists:registrations,id'
+        ]);
+
+        // Get registrations with all necessary relationships
+        $registrations = Registration::with(['user', 'event', 'ticketType', 'qrCode'])
+                                    ->whereIn('id', $request->registration_ids)
+                                    ->get();
+
+        if ($registrations->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No registrations found',
+                'results' => [],
+                'printable_count' => 0,
+                'total_count' => 0
+            ]);
+        }
+
+        $results = [];
+        
+        foreach ($registrations as $registration) {
+            try {
+                $hasTemplate = false;
+                $hasQrCode = false;
+                $templateInfo = null;
+                $issues = [];
+                
+                // Check if registration has a ticket type
+                if (!$registration->ticket_type_id) {
+                    $issues[] = 'No ticket type assigned';
+                } else {
+                    // Check for badge template
+                    $template = BadgeTemplate::where('ticket_id', $registration->ticket_type_id)->first();
+                    if ($template) {
+                        $hasTemplate = true;
+                        $templateInfo = [
+                            'id' => $template->id,
+                            'name' => $template->name ?? 'Unnamed Template',
+                            'contents_count' => BadgeContent::where('badge_template_id', $template->id)->count()
+                        ];
+                    } else {
+                        $issues[] = 'No badge template configured';
+                    }
+                }
+                
+                // Check for QR code
+                if ($registration->qrCode && !empty($registration->qrCode->qr_image)) {
+                    $hasQrCode = true;
+                } else {
+                    $issues[] = 'No QR code generated';
+                }
+                
+                $canPrint = $hasTemplate && $hasQrCode;
+                
+                $result = [
+                    'registration_id' => $registration->id,
+                    'user_name' => $registration->user->name ?? 'N/A',
+                    'user_email' => $registration->user->email ?? 'N/A',
+                    'event_name' => $registration->event->name ?? 'N/A',
+                    'ticket_type' => $registration->ticketType->name ?? 'No ticket type',
+                    'ticket_type_id' => $registration->ticket_type_id,
+                    'has_template' => $hasTemplate,
+                    'has_qr_code' => $hasQrCode,
+                    'can_print' => $canPrint,
+                    'issues' => $issues,
+                    'template_info' => $templateInfo
+                ];
+                
+                $results[] = $result;
+                
+            } catch (\Exception $e) {
+                Log::error("Error processing registration {$registration->id}", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                // Add error result
+                $results[] = [
+                    'registration_id' => $registration->id,
+                    'user_name' => $registration->user->name ?? 'N/A',
+                    'user_email' => $registration->user->email ?? 'N/A',
+                    'event_name' => 'Error',
+                    'ticket_type' => 'Error',
+                    'ticket_type_id' => $registration->ticket_type_id,
+                    'has_template' => false,
+                    'has_qr_code' => false,
+                    'can_print' => false,
+                    'issues' => ['Error processing: ' . $e->getMessage()],
+                    'template_info' => null
+                ];
+            }
+        }
+        
+        $printableCount = collect($results)->where('can_print', true)->count();
+        
+        Log::info('Badge template check completed', [
+            'total_checked' => count($results),
+            'printable_count' => $printableCount
+        ]);
+        
+        return response()->json([
+            'success' => true,
+            'results' => $results,
+            'printable_count' => $printableCount,
+            'total_count' => count($results)
+        ]);
+        
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('Validation error in checkBadgeTemplates', [
+            'errors' => $e->errors()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+        
+    } catch (\Exception $e) {
+        Log::error('Error in checkBadgeTemplates', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Server error occurred',
+            'error' => $e->getMessage()
+        ], 500);
+    }
 }
 }

@@ -34,7 +34,9 @@ class CheckinController extends Controller
     {
         $activeEvents = Event::where('is_active', true)->get();
         $recentActivity = $this->getRecentActivity();
-        $activeVisitors = $this->getActiveVisitors();
+$activeVisitors = VisitorLog::getActiveVisitors()->map(function ($visitor) {
+    return (array) $visitor;
+});
 
         return view('checkin.checkout', compact('activeEvents', 'recentActivity', 'activeVisitors'));
     }

@@ -130,10 +130,7 @@
                     <span class="font-medium">Analytics Dashboard</span>
                 </a>
                 
-                <a href="{{ route('reports.index') }}" class="group flex items-center px-4 py-3 text-white rounded-xl {{ request()->routeIs('reports.*') ? 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg' : 'hover:bg-slate-700' }} transition-all duration-200">
-                    <i class="fas fa-file-alt mr-3 w-5 text-center {{ request()->routeIs('reports.*') ? 'text-white' : 'text-slate-400 group-hover:text-white' }}"></i>
-                    <span class="font-medium">Reports</span>
-                </a>
+          
                 
                 <!-- Administration Section -->
                 @if(auth()->user() && auth()->user()->isAdmin())

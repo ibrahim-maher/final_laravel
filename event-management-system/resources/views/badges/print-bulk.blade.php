@@ -1,3 +1,4 @@
+{{-- resources/views/badges/print-bulk.blade.php --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -298,41 +299,9 @@
             color: white;
         }
         
-        .btn-success {
-            background: linear-gradient(135deg, #28a745, #1e7e34);
-            color: white;
-        }
-        
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-        
-        /* Progress indicator */
-        .print-progress {
-            margin-top: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #666;
-            display: none;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 4px;
-            background: #e9ecef;
-            border-radius: 2px;
-            overflow: hidden;
-            margin-top: 5px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #007bff, #0056b3);
-            width: 0%;
-            transition: width 0.3s ease;
         }
         
         /* Responsive Design */
@@ -362,39 +331,10 @@
                 margin: 5px 0;
             }
         }
-        
-        /* Animation for loading */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .badge-container {
-            animation: fadeIn 0.3s ease forwards;
-        }
-        
-        /* Custom scrollbar for large lists */
-        .bulk-print-container::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        .bulk-print-container::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-        
-        .bulk-print-container::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-        
-        .bulk-print-container::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
     </style>
 </head>
 <body>
-    <!-- Print Controls (Hidden during print) -->
+    <!-- Print Controls -->
     <div class="print-controls no-print">
         @php
             $totalBadges = collect($badgeGroups)->sum(function($group) {
@@ -414,17 +354,6 @@
         <button onclick="window.close()" class="btn btn-secondary">
             ✖️ Close
         </button>
-        
-        <button onclick="downloadBadges()" class="btn btn-success" style="width: 100%; margin-top: 10px;">
-            💾 Save as PDF
-        </button>
-        
-        <div class="print-progress" id="printProgress">
-            <div>Preparing badges for print...</div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Bulk Print Container -->
@@ -501,38 +430,21 @@
                                         $content->position_x, 
                                         $content->position_y
                                     );
-                                    
-                                    if ($fieldData['type'] === 'qr_code') {
-                                        $sizeStyle = sprintf(
-                                            'width: %scm; height: %scm;', 
-                                            $content->image_width ?? 3, 
-                                            $content->image_height ?? 3
-                                        );
-                                    } else {
-                                        $fontStyle = sprintf(
-                                            'font-size: %spt; color: %s; font-family: %s; %s %s',
-                                            $content->font_size,
-                                            $content->font_color,
-                                            $content->font_family,
-                                            $content->is_bold ? 'font-weight: bold;' : '',
-                                            $content->is_italic ? 'font-style: italic;' : ''
-                                        );
-                                    }
                                 @endphp
                                 
                                 @if($fieldData['type'] === 'qr_code')
                                     {{-- QR Code Field --}}
                                     <div class="badge-field qr-field" 
-                                         style="{{ $positionStyle }} {{ $sizeStyle }}">
+                                         style="{{ $positionStyle }} width: {{ $fieldData['width'] }}cm; height: {{ $fieldData['height'] }}cm;">
                                         @if($fieldData['value'])
                                             <img src="{{ $fieldData['value'] }}" 
                                                  alt="QR Code for {{ $registration->user->name }}" 
                                                  class="qr-image"
-                                                 style="width: {{ $content->image_width ?? 3 }}cm; height: {{ $content->image_height ?? 3 }}cm;">
+                                                 style="width: {{ $fieldData['width'] }}cm; height: {{ $fieldData['height'] }}cm;">
                                             <div class="qr-id">{{ $fieldData['registration_id'] }}</div>
                                         @else
-                                            <div style="width: {{ $content->image_width ?? 3 }}cm; 
-                                                        height: {{ $content->image_height ?? 3 }}cm; 
+                                            <div style="width: {{ $fieldData['width'] }}cm; 
+                                                        height: {{ $fieldData['height'] }}cm; 
                                                         background: #f0f0f0; 
                                                         border: 2px dashed #ccc; 
                                                         display: flex; 
@@ -547,9 +459,13 @@
                                 @else
                                     {{-- Text Field --}}
                                     <div class="badge-field text-field" 
-                                         style="{{ $positionStyle }} {{ $fontStyle }}"
-                                         title="{{ $fieldData['value'] }}">
-                                        {{ $fieldData['value'] ?: $content->getFieldDisplayName() }}
+                                         style="{{ $positionStyle }} 
+                                                font-size: {{ $fieldData['font_size'] }}pt;
+                                                color: {{ $fieldData['font_color'] }};
+                                                font-family: {{ $fieldData['font_family'] }};
+                                                {{ $fieldData['is_bold'] ? 'font-weight: bold;' : '' }}
+                                                {{ $fieldData['is_italic'] ? 'font-style: italic;' : '' }}">
+                                        {{ $fieldData['value'] }}
                                     </div>
                                 @endif
                             @endforeach
@@ -561,71 +477,15 @@
     </div>
 
     <script>
-        // Global variables
-        let isPrinting = false;
-        let printStartTime = null;
-        
         // Print all badges function
         function printAllBadges() {
-            if (isPrinting) return;
-            
-            isPrinting = true;
-            printStartTime = Date.now();
-            
-            showPrintProgress();
-            
-            // Small delay to show progress
-            setTimeout(() => {
-                window.print();
-            }, 500);
-        }
-        
-        // Show print progress
-        function showPrintProgress() {
-            const progress = document.getElementById('printProgress');
-            const progressFill = document.getElementById('progressFill');
-            
-            progress.style.display = 'block';
-            
-            // Animate progress bar
-            let width = 0;
-            const interval = setInterval(() => {
-                width += 2;
-                progressFill.style.width = width + '%';
-                
-                if (width >= 100) {
-                    clearInterval(interval);
-                }
-            }, 20);
-        }
-        
-        // Hide print progress
-        function hidePrintProgress() {
-            const progress = document.getElementById('printProgress');
-            progress.style.display = 'none';
-            isPrinting = false;
-        }
-        
-        // Download badges as PDF (requires browser print to PDF)
-        function downloadBadges() {
-            // This will open the print dialog where user can choose "Save as PDF"
-            showPrintProgress();
-            setTimeout(() => {
-                window.print();
-            }, 500);
+            window.print();
         }
         
         // Auto-print functionality
         window.addEventListener('load', function() {
             console.log('Bulk badge print page loaded');
             
-            // Add fade-in animation to badges
-            const badges = document.querySelectorAll('.badge-container');
-            badges.forEach((badge, index) => {
-                badge.style.animationDelay = (index * 50) + 'ms';
-            });
-            
-            // Auto-print if this is a popup window (after small delay)
             setTimeout(() => {
                 if (window.opener && window.opener !== window) {
                     printAllBadges();
@@ -636,27 +496,12 @@
         // Handle after print
         window.addEventListener('afterprint', function() {
             console.log('Print dialog completed');
-            hidePrintProgress();
             
-            // Show completion message
-            const printTime = Date.now() - printStartTime;
-            console.log(`Print process took ${printTime}ms`);
-            
-            // Close window after printing if it's a popup
             if (window.opener && window.opener !== window) {
                 setTimeout(() => {
                     window.close();
                 }, 1500);
             }
-        });
-        
-        // Handle before print
-        window.addEventListener('beforeprint', function() {
-            console.log('Starting print process...');
-            // Hide all no-print elements
-            document.querySelectorAll('.no-print').forEach(el => {
-                el.style.display = 'none';
-            });
         });
         
         // Keyboard shortcuts
@@ -668,52 +513,11 @@
             if (e.key === 'Escape') {
                 window.close();
             }
-            if (e.ctrlKey && e.key === 's') {
-                e.preventDefault();
-                downloadBadges();
-            }
         });
         
-        // Performance monitoring for large batches
+        // Performance monitoring
         const badgeCount = document.querySelectorAll('.badge-container').length;
-        if (badgeCount > 50) {
-            console.log(`Large batch detected: ${badgeCount} badges`);
-            
-            // Add performance optimization for large batches
-            document.addEventListener('DOMContentLoaded', function() {
-                // Lazy load badge animations for better performance
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            entry.target.style.opacity = '1';
-                            entry.target.style.transform = 'translateY(0)';
-                        }
-                    });
-                });
-                
-                document.querySelectorAll('.badge-container').forEach(badge => {
-                    badge.style.opacity = '0';
-                    badge.style.transform = 'translateY(10px)';
-                    badge.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                    observer.observe(badge);
-                });
-            });
-        }
-        
-        // Error handling
-        window.addEventListener('error', function(e) {
-            console.error('Badge print error:', e.error);
-            hidePrintProgress();
-            alert('An error occurred while preparing badges for print. Please try again.');
-        });
-        
-        // Log statistics
-        console.log('Badge Print Statistics:', {
-            totalBadges: badgeCount,
-            templateGroups: document.querySelectorAll('.template-group').length,
-            loadTime: performance.now(),
-            userAgent: navigator.userAgent
-        });
+        console.log(`Bulk print ready: ${badgeCount} badges`);
     </script>
 </body>
 </html>

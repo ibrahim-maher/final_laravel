@@ -17,6 +17,300 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BadgePrintController;
 
+
+// Add these routes to your web.php file
+Route::post('/test-simple-badge-check', function(\Illuminate\Http\Request $request) {
+    try {
+        \Log::info('=== SIMPLE BADGE CHECK TEST ===', [
+            'request_data' => $request->all(),
+            'headers' => $request->headers->all()
+        ]);
+
+        // Basic validation
+        if (!$request->has('registration_ids')) {
+            return response()->json([
+                'error' => 'registration_ids parameter missing',
+                'received_data' => $request->all()
+            ], 400);
+        }
+
+        $registrationIds = $request->registration_ids;
+        
+        if (!is_array($registrationIds)) {
+            return response()->json([
+                'error' => 'registration_ids must be an array',
+                'received_type' => gettype($registrationIds),
+                'received_data' => $registrationIds
+            ], 400);
+        }
+
+        if (empty($registrationIds)) {
+            return response()->json([
+                'error' => 'registration_ids array is empty'
+            ], 400);
+        }
+
+        // Check if registrations exist
+        $registrations = \App\Models\Registration::whereIn('id', $registrationIds)->get();
+        
+        \Log::info('Found registrations', [
+            'requested_ids' => $registrationIds,
+            'found_count' => $registrations->count(),
+            'found_ids' => $registrations->pluck('id')->toArray()
+        ]);
+
+        if ($registrations->isEmpty()) {
+            return response()->json([
+                'error' => 'No registrations found with provided IDs',
+                'requested_ids' => $registrationIds,
+                'total_registrations_in_db' => \App\Models\Registration::count()
+            ], 404);
+        }
+
+        // Simple check without complex logic
+        $results = [];
+        foreach ($registrations as $registration) {
+            $results[] = [
+                'registration_id' => $registration->id,
+                'has_user' => $registration->user_id !== null,
+                'has_ticket_type' => $registration->ticket_type_id !== null,
+                'user_name' => $registration->user->name ?? 'No user',
+                'ticket_type_name' => $registration->ticketType->name ?? 'No ticket type'
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Simple test successful',
+            'results' => $results,
+            'debug_info' => [
+                'php_version' => PHP_VERSION,
+                'laravel_version' => app()->version(),
+                'memory_usage' => memory_get_usage(true),
+                'models_exist' => [
+                    'Registration' => class_exists('App\Models\Registration'),
+                    'BadgeTemplate' => class_exists('App\Models\BadgeTemplate'),
+                    'BadgeContent' => class_exists('App\Models\BadgeContent')
+                ]
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('=== SIMPLE BADGE CHECK TEST ERROR ===', [
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'request_data' => $request->all()
+        ], 500);
+    }
+})->middleware('web');
+
+// Basic Registration Routes
+Route::resource('registrations', RegistrationController::class);
+
+// Additional Registration Routes
+Route::group(['prefix' => 'registrations'], function () {
+    
+    // Bulk actions
+    Route::post('bulk-action', [RegistrationController::class, 'bulkAction'])
+         ->name('registrations.bulk-action');
+    
+    // Export functionality
+    Route::get('export', [RegistrationController::class, 'export'])
+         ->name('registrations.export');
+    
+    Route::post('export-selected', [RegistrationController::class, 'exportSelected'])
+         ->name('registrations.export-selected');
+    
+    // Import functionality
+    Route::post('import', [RegistrationController::class, 'import'])
+         ->name('registrations.import');
+    
+    // Badge printing routes
+    Route::get('{registration}/print-badge', [RegistrationController::class, 'printBadge'])
+         ->name('registrations.print-badge');
+    
+    Route::get('{registration}/preview-badge', [RegistrationController::class, 'previewBadge'])
+         ->name('registrations.preview-badge');
+    
+    Route::post('bulk-print-badges', [RegistrationController::class, 'bulkPrintBadges'])
+         ->name('registrations.bulk-print-badges');
+    
+    Route::post('print-multiple-badges', [RegistrationController::class, 'printMultipleBadges'])
+         ->name('registrations.print-multiple-badges');
+    
+    // QR Code and template checking
+    Route::post('generate-missing-qr-codes', [RegistrationController::class, 'generateMissingQrCodes'])
+         ->name('registrations.generate-missing-qr-codes');
+    
+ 
+});
+
+// Public registration routes
+Route::get('register', [RegistrationController::class, 'publicRegister'])
+     ->name('registrations.public-register');
+
+Route::post('register', [RegistrationController::class, 'publicRegister'])
+     ->name('registrations.public-register.store');
+
+Route::get('registration-success', [RegistrationController::class, 'registrationSuccess'])
+     ->name('registrations.success');
+
+// API Routes for AJAX calls
+Route::group(['prefix' => 'api'], function () {
+    
+    // Event-related API endpoints
+    Route::get('events/{event}/tickets', [RegistrationController::class, 'getTickets'])
+         ->name('api.events.tickets');
+    
+    Route::get('events/{event}/registration-fields', [RegistrationController::class, 'getRegistrationFields'])
+         ->name('api.events.registration-fields');
+    
+    // Badge-related API endpoints
+    Route::get('registrations/{registration}/preview-badge', [RegistrationController::class, 'previewBadge'])
+         ->name('api.registrations.preview-badge');
+    
+    Route::post('registrations/generate-missing-qr-codes', [RegistrationController::class, 'generateMissingQrCodes'])
+         ->name('api.registrations.generate-qr-codes');
+
+});
+
+// Debug routes (remove in production)
+if (config('app.debug')) {
+    Route::get('/debug-badge/{registration}', function (App\Models\Registration $registration) {
+        try {
+            $service = app(\App\Services\BadgePrintingService::class);
+            $debugData = $service->debugRegistrationData($registration);
+            
+            return response()->json($debugData, 200, [], JSON_PRETTY_PRINT);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500, [], JSON_PRETTY_PRINT);
+        }
+    })->middleware('auth')->name('debug.badge');
+
+    Route::get('/debug-badge-view/{registration}', function (App\Models\Registration $registration) {
+        try {
+            $service = app(\App\Services\BadgePrintingService::class);
+            $debugData = $service->debugRegistrationData($registration);
+            
+            return view('debug.badge', compact('debugData', 'registration'));
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500, [], JSON_PRETTY_PRINT);
+        }
+    })->middleware('auth')->name('debug.badge.view');
+
+    // Test routes
+    Route::get('/test-badge-check', function() {
+        try {
+            $registrations = App\Models\Registration::with(['ticketType', 'qrCode', 'user'])
+                                        ->limit(3)
+                                        ->get();
+            
+            if ($registrations->isEmpty()) {
+                return response()->json(['error' => 'No registrations found in database']);
+            }
+
+            $results = [];
+            foreach ($registrations as $registration) {
+                $hasTemplate = false;
+                $templateInfo = null;
+                
+                if ($registration->ticket_type_id) {
+                    $template = App\Models\BadgeTemplate::where('ticket_id', $registration->ticket_type_id)->first();
+                    $hasTemplate = $template !== null;
+                    $templateInfo = $template ? [
+                        'id' => $template->id,
+                        'name' => $template->name ?? 'Unnamed',
+                        'ticket_id' => $template->ticket_id
+                    ] : null;
+                }
+                
+                $results[] = [
+                    'registration_id' => $registration->id,
+                    'user_name' => $registration->user->name ?? 'N/A',
+                    'ticket_type_id' => $registration->ticket_type_id,
+                    'ticket_type_name' => $registration->ticketType->name ?? 'N/A',
+                    'has_qr_code' => $registration->qrCode !== null,
+                    'has_template' => $hasTemplate,
+                    'template_info' => $templateInfo
+                ];
+            }
+            
+            return response()->json([
+                'success' => true,
+                'results' => $results,
+                'total_registrations' => App\Models\Registration::count(),
+                'total_templates' => App\Models\BadgeTemplate::count()
+            ], 200, [], JSON_PRETTY_PRINT);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500, [], JSON_PRETTY_PRINT);
+        }
+    })->middleware('auth');
+
+    Route::get('/check-models', function() {
+        $checks = [];
+        
+        // Check if models exist
+        $checks['models'] = [
+            'Registration' => class_exists('App\Models\Registration'),
+            'BadgeTemplate' => class_exists('App\Models\BadgeTemplate'),
+            'BadgeContent' => class_exists('App\Models\BadgeContent'),
+            'QrCode' => class_exists('App\Models\QrCode'),
+        ];
+        
+        // Check database tables
+        try {
+            $checks['tables'] = [
+                'registrations' => \Schema::hasTable('registrations'),
+                'badge_templates' => \Schema::hasTable('badge_templates'),
+                'badge_contents' => \Schema::hasTable('badge_contents'),
+                'qr_codes' => \Schema::hasTable('qr_codes'),
+            ];
+        } catch (\Exception $e) {
+            $checks['tables_error'] = $e->getMessage();
+        }
+        
+        // Check service
+        $checks['service'] = [
+            'BadgePrintingService' => class_exists('App\Services\BadgePrintingService'),
+            'bound_in_container' => app()->bound(\App\Services\BadgePrintingService::class),
+        ];
+        
+        // Check sample data
+        try {
+            $checks['data'] = [
+                'registrations_count' => App\Models\Registration::count(),
+                'badge_templates_count' => App\Models\BadgeTemplate::count(),
+                'sample_registration' => App\Models\Registration::first() ? true : false,
+            ];
+        } catch (\Exception $e) {
+            $checks['data_error'] = $e->getMessage();
+        }
+        
+        return response()->json($checks, 200, [], JSON_PRETTY_PRINT);
+    })->middleware('auth');
+}
+
 // Landing page and public event browsing
 Route::get('/', [PublicRegistrationController::class, 'index'])->name('home');
 
@@ -55,10 +349,24 @@ Route::middleware(['auth'])->group(function () {
         ->name('registrations.bulk-print-badges');
     Route::get('/registrations/{registration}/preview-badge', [BadgePrintController::class, 'previewBadge'])
         ->name('registrations.preview-badge');
-    Route::post('/registrations/check-badge-templates', [BadgePrintController::class, 'checkBadgeTemplates'])
-        ->name('registrations.check-badge-templates');
+   
     Route::post('/registrations/generate-qr-codes', [BadgePrintController::class, 'generateMissingQrCodes'])
         ->name('registrations.generate-qr-codes');
+
+
+        
+});
+
+Route::prefix('registrations')->name('registrations.')->group(function () {
+    // Check badge templates
+    Route::post('/check-badge-templates', [RegistrationController::class, 'checkBadgeTemplates'])
+        ->name('check-badge-templates');
+    
+  
+    
+    // Bulk print badges
+    Route::post('/bulk-print-badges', [RegistrationController::class, 'bulkPrintBadges'])
+        ->name('bulk-print-badges');
 });
 
 Route::prefix('events')->name('public.events.')->group(function () {

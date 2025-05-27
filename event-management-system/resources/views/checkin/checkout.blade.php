@@ -130,9 +130,7 @@
                             <p class="text-xs text-gray-500">
                                 <i class="fas fa-clock mr-1"></i>
                                 Checked in: {{ $visitor['checked_in_at'] ?? 'Unknown' }}
-                                @if($visitor['duration'])
-                                    <span class="ml-2 text-orange-600">({{ $visitor['duration'] }})</span>
-                                @endif
+                             
                             </p>
                         </div>
                     </div>

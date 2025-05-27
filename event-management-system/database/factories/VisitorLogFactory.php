@@ -16,8 +16,11 @@ class VisitorLogFactory extends Factory
     {
         return [
             'registration_id' => Registration::factory(),
-            'action'          => $this->faker->randomElement(['viewed', 'clicked', 'downloaded']),
-            'admin_note'      => null,                          // or $this->faker->sentence()
+            'action'          => $this->faker->randomElement([
+                                            VisitorLog::ACTION_CHECKIN,
+                                            VisitorLog::ACTION_CHECKOUT,
+                                        ]),   
+            'admin_note'      => $this->faker->optional()->sentence(),
             'created_by'      => User::factory(),
             'visited_at'      => $this->faker->dateTimeBetween('-1 month', 'now'),
         ];

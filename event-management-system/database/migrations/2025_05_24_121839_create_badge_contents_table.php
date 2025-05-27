@@ -39,20 +39,8 @@ class CreateBadgeContentsTable extends Migration
         Schema::create('badge_contents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('template_id')->constrained('badge_templates')->onDelete('cascade');
-            $table->enum('field_name', [
-                'user__username',
-                'user__email', 
-                'user__first_name',
-                'user__last_name',
-                'user__full_name',
-                'user__country',
-                'user__title',
-                'user__company',
-                'ticket_type__name',
-                'event__name',
-                'event__location',
-                'qr_code__qr_image'
-            ]);
+            $table->enum('field_name', array_keys(\App\Models\BadgeContent::FIELD_CHOICES));
+
             $table->decimal('position_x', 5, 2); // X position in cm
             $table->decimal('position_y', 5, 2); // Y position in cm
             $table->integer('font_size')->default(12);

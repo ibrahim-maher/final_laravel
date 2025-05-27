@@ -186,31 +186,6 @@ class VisitorLogController extends Controller
         }
     }
 
-    /**
-     * Analytics dashboard
-     */
-    public function analytics(Request $request)
-    {
-        $eventId = $request->input('event_id');
-        $dateRange = $request->input('date_range', '7'); // days
-        
-        $dateFrom = now()->subDays($dateRange)->startOfDay();
-        $dateTo = now()->endOfDay();
-
-        $analytics = [
-            'overview' => $this->getOverviewAnalytics($eventId, $dateFrom, $dateTo),
-            'hourly_distribution' => $this->getHourlyDistribution($eventId, $dateFrom, $dateTo),
-            'daily_trends' => $this->getDailyTrends($eventId, $dateFrom, $dateTo),
-            'duration_analysis' => $this->getDurationAnalysis($eventId, $dateFrom, $dateTo),
-            'top_events' => $this->getTopEvents($dateFrom, $dateTo),
-            'peak_times' => $this->getPeakTimes($eventId, $dateFrom, $dateTo),
-            'visitor_patterns' => $this->getVisitorPatterns($eventId, $dateFrom, $dateTo)
-        ];
-
-        $events = Event::orderBy('name')->get();
-
-        return view('visitor-logs.analytics', compact('analytics', 'events', 'eventId', 'dateRange'));
-    }
 
     /**
      * Real-time dashboard
@@ -477,31 +452,7 @@ class VisitorLogController extends Controller
         });
     }
 
-    private function getOverviewAnalytics($eventId, $dateFrom, $dateTo)
-    {
-        $query = VisitorLog::query();
-        
-        if ($eventId) {
-            $query->whereHas('registration', function($q) use ($eventId) {
-                $q->where('event_id', $eventId);
-            });
-        }
-
-        $query->whereBetween('created_at', [$dateFrom, $dateTo]);
-
-        return [
-            'total_visits' => (clone $query)->count(),
-            'unique_visitors' => (clone $query)->distinct('registration_id')->count(),
-            'total_checkins' => (clone $query)->where('action', 'checkin')->count(),
-            'total_checkouts' => (clone $query)->where('action', 'checkout')->count(),
-            'average_duration' => (clone $query)->where('action', 'checkout')
-                                               ->whereNotNull('duration_minutes')
-                                               ->avg('duration_minutes'),
-            'total_duration' => (clone $query)->where('action', 'checkout')
-                                             ->whereNotNull('duration_minutes')
-                                             ->sum('duration_minutes')
-        ];
-    }
+  
 
     private function getDailyTrends($eventId, $dateFrom, $dateTo)
 {
@@ -577,51 +528,20 @@ private function getHourlyDistribution($eventId, $dateFrom, $dateTo)
     ];
 }
 
-    private function getDurationAnalysis($eventId, $dateFrom, $dateTo)
-{
-    $query = VisitorLog::where('action', 'checkout')
-                      ->whereNotNull('duration_minutes')
-                      ->whereBetween('created_at', [$dateFrom, $dateTo]);
-
-    if ($eventId) {
-        $query->whereHas('registration', function($q) use ($eventId) {
-            $q->where('event_id', $eventId);
-        });
-    }
-
-    $durations = $query->pluck('duration_minutes');
-
-    $ranges = [
-        '0-30 min' => $durations->filter(fn($d) => $d <= 30)->count(),
-        '31-60 min' => $durations->filter(fn($d) => $d > 30 && $d <= 60)->count(),
-        '61-120 min' => $durations->filter(fn($d) => $d > 60 && $d <= 120)->count(),
-        '121+ min' => $durations->filter(fn($d) => $d > 120)->count(),
-    ];
-
-    return [
-        'min' => $durations->min(),
-        'max' => $durations->max(),
-        'avg' => $durations->avg(),
-        'median' => $durations->median(),
-        'ranges' => $ranges,
-        // Add the format expected by the template
-        'labels' => array_keys($ranges),
-        'data' => array_values($ranges)
-    ];
-}
+  
     private function getTopEvents($dateFrom, $dateTo)
     {
-        return DB::table('visitor_logs')
-                ->join('registrations', 'visitor_logs.registration_id', '=', 'registrations.id')
-                ->join('events', 'registrations.event_id', '=', 'events.id')
-                ->selectRaw('events.id, events.name, COUNT(*) as visit_count')
-                ->whereBetween('visitor_logs.created_at', [$dateFrom, $dateTo])
-                ->whereNull('visitor_logs.deleted_at')
-                ->groupBy('events.id', 'events.name')
-                ->orderBy('visit_count', 'desc')
-                ->limit(10)
-                ->get();
-    }
+    return DB::table('visitor_logs')
+            ->join('registrations', 'visitor_logs.registration_id', '=', 'registrations.id')
+            ->join('events', 'registrations.event_id', '=', 'events.id')
+            ->selectRaw('events.id, events.name, COUNT(*) as visits') // Changed from visit_count to visits
+            ->whereBetween('visitor_logs.created_at', [$dateFrom, $dateTo])
+            ->whereNull('visitor_logs.deleted_at')
+            ->groupBy('events.id', 'events.name')
+            ->orderBy('visits', 'desc') // Changed from visit_count to visits
+            ->limit(10)
+            ->get();
+}
 
 private function getPeakTimes($eventId, $dateFrom, $dateTo)
 {
@@ -1034,4 +954,329 @@ private function getPeakTimes($eventId, $dateFrom, $dateTo)
             'summary' => $this->generateSummaryReport($eventId, $dateFrom, $dateTo)
         ];
     }
+
+    // Add this method to your VisitorLogController to fix duration calculation
+private function calculateAndStoreDurations()
+{
+    // Get all check-ins that don't have corresponding check-outs with durations
+    $incompleteVisits = DB::table('visitor_logs as checkin')
+        ->select([
+            'checkin.id as checkin_id',
+            'checkin.registration_id',
+            'checkin.created_at as checkin_time',
+            'checkout.id as checkout_id',
+            'checkout.created_at as checkout_time'
+        ])
+        ->leftJoin('visitor_logs as checkout', function($join) {
+            $join->on('checkin.registration_id', '=', 'checkout.registration_id')
+                 ->where('checkout.action', '=', 'checkout')
+                 ->whereColumn('checkout.created_at', '>', 'checkin.created_at');
+        })
+        ->where('checkin.action', 'checkin')
+        ->whereNull('checkin.deleted_at')
+        ->whereNull('checkout.duration_minutes') // Only get ones without calculated duration
+        ->whereNotNull('checkout.id') // Must have a checkout
+        ->get();
+
+    foreach ($incompleteVisits as $visit) {
+        $checkinTime = Carbon::parse($visit->checkin_time);
+        $checkoutTime = Carbon::parse($visit->checkout_time);
+        $durationMinutes = $checkinTime->diffInMinutes($checkoutTime);
+
+        // Update the checkout record with the calculated duration
+        DB::table('visitor_logs')
+            ->where('id', $visit->checkout_id)
+            ->update(['duration_minutes' => $durationMinutes]);
+    }
+}
+
+// Enhanced getDurationAnalysis method
+private function getDurationAnalysis($eventId, $dateFrom, $dateTo)
+{
+    // First, ensure durations are calculated
+    $this->calculateAndStoreDurations();
+
+    $query = VisitorLog::where('action', 'checkout')
+                      ->whereNotNull('duration_minutes')
+                      ->whereBetween('created_at', [$dateFrom, $dateTo]);
+
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
+    }
+
+    $durations = $query->pluck('duration_minutes');
+
+    // If no duration data, try to calculate from existing check-in/check-out pairs
+    if ($durations->isEmpty()) {
+        $durations = $this->calculateDurationsOnTheFly($eventId, $dateFrom, $dateTo);
+    }
+
+    if ($durations->isEmpty()) {
+        return [
+            'min' => 0,
+            'max' => 0,
+            'avg' => 0,
+            'median' => 0,
+            'ranges' => [
+                '0-30 min' => 0,
+                '31-60 min' => 0,
+                '61-120 min' => 0,
+                '121+ min' => 0,
+            ],
+            'labels' => ['0-30 min', '31-60 min', '61-120 min', '121+ min'],
+            'data' => [0, 0, 0, 0],
+            'total_records' => 0
+        ];
+    }
+
+    $ranges = [
+        '0-30 min' => $durations->filter(fn($d) => $d <= 30)->count(),
+        '31-60 min' => $durations->filter(fn($d) => $d > 30 && $d <= 60)->count(),
+        '61-120 min' => $durations->filter(fn($d) => $d > 60 && $d <= 120)->count(),
+        '121+ min' => $durations->filter(fn($d) => $d > 120)->count(),
+    ];
+
+    return [
+        'min' => $durations->min() ?? 0,
+        'max' => $durations->max() ?? 0,
+        'avg' => round($durations->avg() ?? 0, 2),
+        'median' => $durations->median() ?? 0,
+        'ranges' => $ranges,
+        'labels' => array_keys($ranges),
+        'data' => array_values($ranges),
+        'total_records' => $durations->count(),
+        // Additional statistics
+        'percentiles' => [
+            '25th' => $durations->sort()->values()[floor($durations->count() * 0.25)] ?? 0,
+            '75th' => $durations->sort()->values()[floor($durations->count() * 0.75)] ?? 0,
+            '90th' => $durations->sort()->values()[floor($durations->count() * 0.90)] ?? 0,
+        ]
+    ];
+}
+
+// Method to calculate durations on-the-fly from existing data
+private function calculateDurationsOnTheFly($eventId, $dateFrom, $dateTo)
+{
+    $query = DB::table('visitor_logs')
+        ->select([
+            'registration_id',
+            'action',
+            'created_at'
+        ])
+        ->whereBetween('created_at', [$dateFrom, $dateTo])
+        ->whereNull('deleted_at')
+        ->orderBy('registration_id')
+        ->orderBy('created_at');
+
+    if ($eventId) {
+        $query->whereExists(function($subQuery) use ($eventId) {
+            $subQuery->select(DB::raw(1))
+                    ->from('registrations')
+                    ->whereColumn('registrations.id', 'visitor_logs.registration_id')
+                    ->where('event_id', $eventId);
+        });
+    }
+
+    $logs = $query->get()->groupBy('registration_id');
+    $durations = collect();
+
+    foreach ($logs as $registrationId => $userLogs) {
+        $checkins = $userLogs->where('action', 'checkin')->sortBy('created_at');
+        $checkouts = $userLogs->where('action', 'checkout')->sortBy('created_at');
+
+        foreach ($checkins as $checkin) {
+            // Find the next checkout after this checkin
+            $checkout = $checkouts->where('created_at', '>', $checkin->created_at)->first();
+            
+            if ($checkout) {
+                $checkinTime = Carbon::parse($checkin->created_at);
+                $checkoutTime = Carbon::parse($checkout->created_at);
+                $duration = $checkinTime->diffInMinutes($checkoutTime);
+                
+                // Only add reasonable durations (less than 24 hours)
+                if ($duration > 0 && $duration < 1440) {
+                    $durations->push($duration);
+                }
+            }
+        }
+    }
+
+    return $durations;
+}
+
+// Enhanced overview analytics with better duration handling
+private function getOverviewAnalytics($eventId, $dateFrom, $dateTo)
+{
+    $query = VisitorLog::query();
+    
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
+    }
+
+    $query->whereBetween('created_at', [$dateFrom, $dateTo]);
+
+    // Calculate durations on-the-fly if not stored
+    $durationAnalysis = $this->getDurationAnalysis($eventId, $dateFrom, $dateTo);
+    
+    $totalVisits = (clone $query)->count();
+    $uniqueVisitors = (clone $query)->distinct('registration_id')->count();
+    $totalCheckins = (clone $query)->where('action', 'checkin')->count();
+    $totalCheckouts = (clone $query)->where('action', 'checkout')->count();
+    
+    // Get stored duration or calculate average from analysis
+    $avgDurationFromDB = (clone $query)->where('action', 'checkout')
+                                       ->whereNotNull('duration_minutes')
+                                       ->avg('duration_minutes');
+    
+    $avgDuration = $avgDurationFromDB ?? $durationAnalysis['avg'];
+    
+    // Get stored total duration or calculate from analysis
+    $totalDurationFromDB = (clone $query)->where('action', 'checkout')
+                                         ->whereNotNull('duration_minutes')
+                                         ->sum('duration_minutes');
+    
+    $totalDuration = $totalDurationFromDB ?? ($durationAnalysis['avg'] * $durationAnalysis['total_records']);
+
+    return [
+        'total_visits' => $totalVisits,
+        'unique_visitors' => $uniqueVisitors,
+        'total_checkins' => $totalCheckins,
+        'total_checkouts' => $totalCheckouts,
+        'average_duration' => round($avgDuration ?? 0, 2),
+        'total_duration' => $totalDuration ?? 0,
+        'completion_rate' => $totalCheckins > 0 ? round(($totalCheckouts / $totalCheckins) * 100, 2) : 0,
+        'duration_stats' => $durationAnalysis
+    ];
+}
+
+// Method to create a comprehensive analytics report
+private function getComprehensiveAnalytics($eventId, $dateFrom, $dateTo)
+{
+    return [
+        'overview' => $this->getOverviewAnalytics($eventId, $dateFrom, $dateTo),
+        'hourly_distribution' => $this->getHourlyDistribution($eventId, $dateFrom, $dateTo),
+        'daily_trends' => $this->getDailyTrends($eventId, $dateFrom, $dateTo),
+        'duration_analysis' => $this->getDurationAnalysis($eventId, $dateFrom, $dateTo),
+        'top_events' => $this->getTopEvents($dateFrom, $dateTo),
+        'peak_times' => $this->getPeakTimes($eventId, $dateFrom, $dateTo),
+        'visitor_patterns' => $this->getVisitorPatterns($eventId, $dateFrom, $dateTo),
+        'conversion_metrics' => $this->getConversionMetrics($eventId, $dateFrom, $dateTo),
+        'trend_analysis' => $this->getTrendAnalysis($eventId, $dateFrom, $dateTo)
+    ];
+}
+
+// New method for conversion metrics
+private function getConversionMetrics($eventId, $dateFrom, $dateTo)
+{
+    $query = VisitorLog::whereBetween('created_at', [$dateFrom, $dateTo]);
+    
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
+    }
+
+    $checkins = (clone $query)->where('action', 'checkin')->count();
+    $checkouts = (clone $query)->where('action', 'checkout')->count();
+    $uniqueRegistrations = (clone $query)->distinct('registration_id')->count();
+    
+    // Calculate bounce rate (visitors who checked in but never checked out)
+    $bounceRate = $checkins > 0 ? round((($checkins - $checkouts) / $checkins) * 100, 2) : 0;
+    
+    // Calculate return visitor rate
+    $repeatVisitors = DB::table('visitor_logs')
+        ->select('registration_id')
+        ->whereBetween('created_at', [$dateFrom, $dateTo])
+        ->when($eventId, function($q) use ($eventId) {
+            $q->whereExists(function($subQuery) use ($eventId) {
+                $subQuery->select(DB::raw(1))
+                        ->from('registrations')
+                        ->whereColumn('registrations.id', 'visitor_logs.registration_id')
+                        ->where('event_id', $eventId);
+            });
+        })
+        ->groupBy('registration_id')
+        ->havingRaw('COUNT(*) > 2') // More than one check-in/check-out pair
+        ->count();
+
+    $returnRate = $uniqueRegistrations > 0 ? round(($repeatVisitors / $uniqueRegistrations) * 100, 2) : 0;
+
+    return [
+        'completion_rate' => $checkins > 0 ? round(($checkouts / $checkins) * 100, 2) : 0,
+        'bounce_rate' => $bounceRate,
+        'return_visitor_rate' => $returnRate,
+        'total_sessions' => $checkins,
+        'completed_sessions' => $checkouts,
+        'unique_visitors' => $uniqueRegistrations,
+        'repeat_visitors' => $repeatVisitors
+    ];
+}
+
+// New method for trend analysis
+private function getTrendAnalysis($eventId, $dateFrom, $dateTo)
+{
+    // Compare with previous period
+    $periodDiff = Carbon::parse($dateTo)->diffInDays(Carbon::parse($dateFrom));
+    $previousDateFrom = Carbon::parse($dateFrom)->subDays($periodDiff);
+    $previousDateTo = Carbon::parse($dateFrom)->subDay();
+
+    $currentPeriod = $this->getOverviewAnalytics($eventId, $dateFrom, $dateTo);
+    $previousPeriod = $this->getOverviewAnalytics($eventId, $previousDateFrom, $previousDateTo);
+
+    $trends = [];
+    foreach (['total_visits', 'unique_visitors', 'total_checkins', 'total_checkouts', 'average_duration'] as $metric) {
+        $current = $currentPeriod[$metric] ?? 0;
+        $previous = $previousPeriod[$metric] ?? 0;
+        
+        if ($previous > 0) {
+            $change = (($current - $previous) / $previous) * 100;
+            $trends[$metric] = [
+                'current' => $current,
+                'previous' => $previous,
+                'change_percent' => round($change, 2),
+                'trend' => $change > 0 ? 'up' : ($change < 0 ? 'down' : 'stable')
+            ];
+        } else {
+            $trends[$metric] = [
+                'current' => $current,
+                'previous' => $previous,
+                'change_percent' => $current > 0 ? 100 : 0,
+                'trend' => $current > 0 ? 'up' : 'stable'
+            ];
+        }
+    }
+
+    return $trends;
+}
+
+// Updated analytics method in the controller
+public function analytics(Request $request)
+{
+    $eventId = $request->input('event_id');
+    $dateRange = $request->input('date_range', '7'); // days
+    
+    $dateFrom = now()->subDays($dateRange)->startOfDay();
+    $dateTo = now()->endOfDay();
+
+    // Use the comprehensive analytics method
+    $analytics = $this->getComprehensiveAnalytics($eventId, $dateFrom, $dateTo);
+
+    $events = Event::orderBy('name')->get();
+
+    // Add debug information if no duration data
+    if ($analytics['duration_analysis']['total_records'] === 0) {
+        Log::info('No duration data found', [
+            'event_id' => $eventId,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'total_logs' => VisitorLog::whereBetween('created_at', [$dateFrom, $dateTo])->count()
+        ]);
+    }
+
+    return view('visitor-logs.analytics', compact('analytics', 'events', 'eventId', 'dateRange'));
+}
 }

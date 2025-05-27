@@ -1,4 +1,4 @@
-{{-- Badge Preview Template - resources/views/badges/preview.blade.php --}}
+{{-- resources/views/badges/preview.blade.php --}}
 <div class="badge-preview-wrapper" style="display: inline-block; margin: 10px;">
     <div class="badge-preview-container" 
          style="position: relative; 
@@ -34,8 +34,8 @@
                 <div style="position: absolute; 
                            left: {{ $leftPx }}px; 
                            top: {{ $topPx }}px; 
-                           width: {{ ($content->image_width ?? 3) * 37.795 }}px; 
-                           height: {{ ($content->image_height ?? 3) * 37.795 }}px;
+                           width: {{ $fieldData['width'] * 37.795 }}px; 
+                           height: {{ $fieldData['height'] * 37.795 }}px;
                            display: flex; 
                            flex-direction: column;
                            align-items: center; 
@@ -43,8 +43,8 @@
                     @if($fieldData['value'])
                         <img src="{{ $fieldData['value'] }}" 
                              alt="QR Code Preview"
-                             style="width: {{ ($content->image_width ?? 3) * 37.795 }}px; 
-                                    height: {{ ($content->image_height ?? 3) * 37.795 }}px; 
+                             style="width: {{ $fieldData['width'] * 37.795 }}px; 
+                                    height: {{ $fieldData['height'] * 37.795 }}px; 
                                     object-fit: contain;
                                     border: none;">
                         <div style="font-family: Arial, sans-serif;
@@ -58,8 +58,8 @@
                             {{ $fieldData['registration_id'] }}
                         </div>
                     @else
-                        <div style="width: {{ ($content->image_width ?? 3) * 37.795 }}px; 
-                                    height: {{ ($content->image_height ?? 3) * 37.795 }}px; 
+                        <div style="width: {{ $fieldData['width'] * 37.795 }}px; 
+                                    height: {{ $fieldData['height'] * 37.795 }}px; 
                                     background: #f0f0f0; 
                                     border: 2px dashed #ccc; 
                                     display: flex; 
@@ -77,17 +77,17 @@
                 <div style="position: absolute; 
                            left: {{ $leftPx }}px; 
                            top: {{ $topPx }}px;
-                           font-size: {{ $content->font_size * 1.33 }}px;
-                           color: {{ $content->font_color }};
-                           font-family: {{ $content->font_family }};
-                           {{ $content->is_bold ? 'font-weight: bold;' : '' }}
-                           {{ $content->is_italic ? 'font-style: italic;' : '' }}
+                           font-size: {{ $fieldData['font_size'] * 1.33 }}px;
+                           color: {{ $fieldData['font_color'] }};
+                           font-family: {{ $fieldData['font_family'] }};
+                           {{ $fieldData['is_bold'] ? 'font-weight: bold;' : '' }}
+                           {{ $fieldData['is_italic'] ? 'font-style: italic;' : '' }}
                            white-space: nowrap;
                            overflow: hidden;
                            text-overflow: ellipsis;
                            max-width: {{ ($badgeTemplate->width * 37.795) - $leftPx - 10 }}px;
                            line-height: 1.2;">
-                    {{ $fieldData['value'] ?: $content->getFieldDisplayName() }}
+                    {{ $fieldData['value'] }}
                 </div>
             @endif
         @endforeach

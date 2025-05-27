@@ -1,3 +1,4 @@
+{{-- resources/views/badges/print-single.blade.php --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,7 +38,7 @@
             background-position: center;
             background-repeat: no-repeat;
             @endif
-            @if($badgeTemplate->border_width ?? 0 > 0)
+            @if(($badgeTemplate->border_width ?? 0) > 0)
             border: {{ $badgeTemplate->border_width }}px solid {{ $badgeTemplate->border_color ?? '#000000' }};
             @endif
             overflow: hidden;
@@ -180,7 +181,7 @@
     </style>
 </head>
 <body>
-    <!-- Print Controls (Hidden during print) -->
+    <!-- Print Controls -->
     <div class="print-controls no-print">
         <button onclick="window.print()" class="btn btn-primary">
             🖨️ Print Badge
@@ -202,38 +203,21 @@
                     $content->position_x, 
                     $content->position_y
                 );
-                
-                if ($fieldData['type'] === 'qr_code') {
-                    $sizeStyle = sprintf(
-                        'width: %scm; height: %scm;', 
-                        $content->image_width ?? 3, 
-                        $content->image_height ?? 3
-                    );
-                } else {
-                    $fontStyle = sprintf(
-                        'font-size: %spt; color: %s; font-family: %s; %s %s',
-                        $content->font_size,
-                        $content->font_color,
-                        $content->font_family,
-                        $content->is_bold ? 'font-weight: bold;' : '',
-                        $content->is_italic ? 'font-style: italic;' : ''
-                    );
-                }
             @endphp
             
             @if($fieldData['type'] === 'qr_code')
                 {{-- QR Code Field --}}
                 <div class="badge-field qr-field" 
-                     style="{{ $positionStyle }} {{ $sizeStyle }}">
+                     style="{{ $positionStyle }} width: {{ $fieldData['width'] }}cm; height: {{ $fieldData['height'] }}cm;">
                     @if($fieldData['value'])
                         <img src="{{ $fieldData['value'] }}" 
                              alt="QR Code" 
                              class="qr-image"
-                             style="width: {{ $content->image_width ?? 3 }}cm; height: {{ $content->image_height ?? 3 }}cm;">
+                             style="width: {{ $fieldData['width'] }}cm; height: {{ $fieldData['height'] }}cm;">
                         <div class="qr-id">{{ $fieldData['registration_id'] }}</div>
                     @else
-                        <div style="width: {{ $content->image_width ?? 3 }}cm; 
-                                    height: {{ $content->image_height ?? 3 }}cm; 
+                        <div style="width: {{ $fieldData['width'] }}cm; 
+                                    height: {{ $fieldData['height'] }}cm; 
                                     background: #f0f0f0; 
                                     border: 2px dashed #ccc; 
                                     display: flex; 
@@ -248,8 +232,13 @@
             @else
                 {{-- Text Field --}}
                 <div class="badge-field text-field" 
-                     style="{{ $positionStyle }} {{ $fontStyle }}">
-                    {{ $fieldData['value'] ?: $content->getFieldDisplayName() }}
+                     style="{{ $positionStyle }} 
+                            font-size: {{ $fieldData['font_size'] }}pt;
+                            color: {{ $fieldData['font_color'] }};
+                            font-family: {{ $fieldData['font_family'] }};
+                            {{ $fieldData['is_bold'] ? 'font-weight: bold;' : '' }}
+                            {{ $fieldData['is_italic'] ? 'font-style: italic;' : '' }}">
+                    {{ $fieldData['value'] }}
                 </div>
             @endif
         @endforeach
@@ -258,9 +247,7 @@
     <script>
         // Auto-print functionality
         window.addEventListener('load', function() {
-            // Small delay to ensure everything is loaded
             setTimeout(function() {
-                // Auto-print if this is a popup window
                 if (window.opener && window.opener !== window) {
                     window.print();
                 }
@@ -269,7 +256,6 @@
         
         // Handle after print
         window.addEventListener('afterprint', function() {
-            // Close window after printing if it's a popup
             if (window.opener && window.opener !== window) {
                 setTimeout(function() {
                     window.close();
@@ -287,16 +273,6 @@
                 window.close();
             }
         });
-        
-        // Print function for manual trigger
-        function printBadge() {
-            window.print();
-        }
-        
-        // Close function
-        function closeBadge() {
-            window.close();
-        }
     </script>
 </body>
 </html>
