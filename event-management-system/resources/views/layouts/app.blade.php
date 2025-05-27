@@ -24,15 +24,7 @@
         <div class="bg-gradient-to-b from-slate-900 to-slate-800 w-72 min-h-screen shadow-2xl flex flex-col" id="sidebar">
             <!-- Logo Section -->
             <div class="p-6 border-b border-slate-700">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                        <i class="fas fa-calendar-check text-white text-lg"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-white text-xl font-bold">Event Manager</h2>
-                        <p class="text-slate-400 text-xs">{{ auth()->user()->role ?? 'Guest' }}</p>
-                    </div>
-                </div>
+                
             </div>
             
             <!-- User Profile Section -->
@@ -172,18 +164,9 @@
                 
                 <!-- User Actions -->
                 <div class="space-y-2">
-                    <a href="" class="flex items-center justify-between px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-all">
-                        <span class="flex items-center">
-                            <i class="fas fa-bell mr-2"></i>
-                            Notifications
-                        </span>
-                       
-                    </a>
+                   
                     
-                    <a href="" class="flex items-center px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-all">
-                        <i class="fas fa-user-circle mr-2"></i>
-                        My Profile
-                    </a>
+                   
                     
                     <form method="POST" action="{{ route('logout') }}" class="w-full">
                         @csrf
@@ -216,31 +199,7 @@
                     <div class="flex items-center space-x-4">
                     
                        
-                        <!-- User Menu -->
-                        <div class="relative" x-data="{ open: false }">
-                            <button @click="open = !open" class="flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                                <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
-                                    <span class="text-white font-semibold text-sm">{{ substr(auth()->user()->name, 0, 1) }}</span>
-                                </div>
-                                <span class="text-gray-700 font-medium hidden md:block">{{ auth()->user()->name }}</span>
-                                <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
-                            </button>
-                            
-                            <!-- Dropdown Menu -->
-                            <div x-show="open" @click.away="open = false" x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
-                                <a href="" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                    <i class="fas fa-user-circle mr-2"></i>My Profile
-                                </a>
-                               
-                                <hr class="my-2">
-                                <form method="POST" action="{{ route('logout') }}">
-                                    @csrf
-                                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
+                        
                     </div>
                 </div>
             </header>

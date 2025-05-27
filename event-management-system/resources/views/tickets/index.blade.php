@@ -42,6 +42,7 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sold</th>
+
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
@@ -63,12 +64,11 @@
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="text-sm text-gray-900">{{ $ticket->registrations->count() }}</div>
                     </td>
+                    
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div class="flex space-x-2">
                            
-                            <a href="{{ route('tickets.edit', $ticket) }}" class="text-yellow-600 hover:text-yellow-900">
-                                <i class="fas fa-edit"></i>
-                            </a>
+                           
                             <form method="POST" action="{{ route('tickets.destroy', $ticket) }}" class="inline" 
                                   onsubmit="return confirm('Are you sure?')">
                                 @csrf

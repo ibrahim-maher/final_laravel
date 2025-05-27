@@ -28,7 +28,6 @@ class Registration extends Model
         self::STATUS_CANCELLED => 'Cancelled',
     ];
 
-    // Relationships
     public function event()
     {
         return $this->belongsTo(Event::class);
@@ -60,15 +59,8 @@ class Registration extends Model
         return self::STATUSES[$this->status] ?? $this->status;
     }
 
-    public function getRegistrationDataAttribute($value)
-    {
-        return $value ? json_decode($value, true) : [];
-    }
-
-    public function setRegistrationDataAttribute($value)
-    {
-        $this->attributes['registration_data'] = json_encode($value);
-    }
+    // Remove the custom getter/setter since we're using the cast
+    // The cast will handle the JSON conversion automatically
 
     // Scopes
     public function scopeForEvent($query, $eventId)
@@ -100,24 +92,28 @@ class Registration extends Model
     // Methods
     public function getRegistrationFieldValue($fieldName)
     {
-        $data = $this->registration_data;
+        $data = $this->registration_data ?? [];
         return $data[$fieldName] ?? null;
     }
 
     public function setRegistrationFieldValue($fieldName, $value)
     {
-        $data = $this->registration_data;
+        $data = $this->registration_data ?? [];
         $data[$fieldName] = $value;
         $this->registration_data = $data;
     }
 
     public function generateQRCode()
     {
-        if (!$this->qrCode) {
-            QRCode::create([
-                'registration_id' => $this->id,
-                'ticket_type_id' => $this->ticket_type_id,
-            ]);
+        if (!$this->qrCode && class_exists('App\Models\QRCode')) {
+            try {
+                \App\Models\QRCode::create([
+                    'registration_id' => $this->id,
+                    'ticket_type_id' => $this->ticket_type_id,
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('Failed to generate QR code: ' . $e->getMessage());
+            }
         }
     }
 
@@ -127,7 +123,12 @@ class Registration extends Model
 
         static::created(function ($registration) {
             // Auto-generate QR code when registration is created
-            $registration->generateQRCode();
+            try {
+                $registration->generateQRCode();
+            } catch (\Exception $e) {
+                \Log::error('Failed to auto-generate QR code: ' . $e->getMessage());
+                // Don't fail the registration creation if QR code generation fails
+            }
         });
     }
 }

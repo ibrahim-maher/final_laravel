@@ -1,4 +1,10 @@
 {{-- resources/views/visitor-logs/reports/summary.blade.php --}}
+@extends('layouts.app')
+
+@section('title', 'Visitor Analytics')
+@section('page-title', 'Advanced Analytics Dashboard')
+
+@section('content')
 <div class="space-y-6">
     <!-- Report Header -->
     <div class="bg-white rounded-xl shadow-lg p-6">
@@ -182,3 +188,4 @@
         </div>
     </div>
 </div>
+@endsection

@@ -15,7 +15,75 @@ use App\Http\Controllers\RegistrationFieldController;
 use App\Http\Controllers\PublicRegistrationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\BadgePrintController;
 
+// Landing page and public event browsing
+Route::get('/', [PublicRegistrationController::class, 'index'])->name('home');
+
+// Public event registration routes
+Route::post('/events/{event}/register', [PublicRegistrationController::class, 'store'])->name('public.events.store');
+Route::get('/registration/{registration}/success', [PublicRegistrationController::class, 'success'])->name('public.registration.success');
+Route::get('/registration/{registration}/download-qr', [PublicRegistrationController::class, 'downloadQR'])->name('public.registration.download-qr');
+
+// Debug routes (remove in production)
+Route::get('/debug-events', [PublicRegistrationController::class, 'debug']);
+Route::get('/fix-event-times', [PublicRegistrationController::class, 'fixEventTimes']);
+
+
+
+
+
+// API endpoints for dynamic functionality (optional)
+Route::prefix('api')->group(function () {
+    Route::get('/events/{event}/tickets', [RegistrationController::class, 'getTickets'])->name('api.events.tickets');
+    Route::get('/events/{event}/registration-fields', [RegistrationController::class, 'getRegistrationFields'])->name('api.events.fields');
+});
+// API endpoints for AJAX functionality (optional)
+Route::prefix('api')->group(function () {
+    Route::get('/events/{event}/tickets', [RegistrationController::class, 'getTickets']);
+    Route::get('/events/{event}/registration-fields', [RegistrationController::class, 'getRegistrationFields']);
+});
+
+
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/registrations/{registration}/print-badge', [BadgePrintController::class, 'printSingleBadge'])
+        ->name('registrations.print-badge');
+    Route::get('/registrations/print-badges', [BadgePrintController::class, 'printMultipleBadges'])
+        ->name('registrations.print-multiple-badges');
+    Route::post('/registrations/bulk-print-badges', [BadgePrintController::class, 'bulkPrintBadges'])
+        ->name('registrations.bulk-print-badges');
+    Route::get('/registrations/{registration}/preview-badge', [BadgePrintController::class, 'previewBadge'])
+        ->name('registrations.preview-badge');
+    Route::post('/registrations/check-badge-templates', [BadgePrintController::class, 'checkBadgeTemplates'])
+        ->name('registrations.check-badge-templates');
+    Route::post('/registrations/generate-qr-codes', [BadgePrintController::class, 'generateMissingQrCodes'])
+        ->name('registrations.generate-qr-codes');
+});
+
+Route::prefix('events')->name('public.events.')->group(function () {
+    Route::get('/', [PublicRegistrationController::class, 'index'])->name('index');
+    Route::get('/{event}', [PublicRegistrationController::class, 'show'])->name('show');
+    Route::get('/{event}/register', [PublicRegistrationController::class, 'register'])->name('register');
+    Route::post('/{event}/register', [PublicRegistrationController::class, 'store'])->name('store');
+});
+
+// Registration success and utilities
+Route::prefix('registration')->name('public.registration.')->group(function () {
+    Route::get('/{registration}/success', [PublicRegistrationController::class, 'success'])->name('success');
+    Route::get('/{registration}/download-qr', [PublicRegistrationController::class, 'downloadQR'])->name('download-qr');
+});
+
+// API endpoints for dynamic form loading
+Route::prefix('api')->group(function () {
+    Route::get('/events/{event}/tickets', [RegistrationController::class, 'getTickets']);
+    Route::get('/events/{event}/registration-fields', [RegistrationController::class, 'getRegistrationFields']);
+});
+
+ Route::get('/events', [EventController::class, 'index'])->name('events.index');
+    Route::get('/events/create', [EventController::class, 'create'])->name('events.create');
+    Route::post('/events', [EventController::class, 'store'])->name('events.store');
+   
 /*
 |--------------------------------------------------------------------------
 | Public Routes (No Authentication Required)
@@ -30,7 +98,6 @@ Route::prefix('events')->name('public.')->group(function () {
     Route::get('/', [PublicRegistrationController::class, 'index'])->name('events.index');
     Route::get('/{event}', [PublicRegistrationController::class, 'show'])->name('events.show');
     Route::get('/{event}/register', [PublicRegistrationController::class, 'register'])->name('events.register');
-    Route::post('/{event}/register', [PublicRegistrationController::class, 'store'])->name('events.register.store');
 });
 
 // Registration success and QR download
@@ -147,6 +214,14 @@ Route::middleware(['auth'])->group(function () {
             Route::get('{registration}/badge-download', [RegistrationController::class, 'downloadBadge'])->name('download-badge');
             Route::get('{registration}/qr-code', [RegistrationController::class, 'downloadQrCode'])->name('download-qr-code');
             Route::post('{registration}/resend-confirmation', [RegistrationController::class, 'resendConfirmation'])->name('resend-confirmation');
+            
+            // Import/Export routes
+            Route::post('import', [RegistrationController::class, 'import'])->name('import');
+            Route::post('export-selected', [RegistrationController::class, 'exportSelected'])->name('export-selected');
+            
+            // Badge printing
+            Route::get('{registration}/print-badge', [RegistrationController::class, 'printBadge'])->name('print-badge');
+            Route::post('bulk-print-badges', [RegistrationController::class, 'bulkPrintBadges'])->name('bulk-print-badges');
         });
         
         // AJAX endpoints for registrations
@@ -226,6 +301,10 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
+// Public registration routes (no auth required)
+Route::match(['get', 'post'], 'register-for-event', [RegistrationController::class, 'publicRegister'])->name('registrations.public-register');
+Route::get('registration-success', [RegistrationController::class, 'registrationSuccess'])->name('registrations.success');
+
 /*
 |--------------------------------------------------------------------------
 | API Routes for AJAX calls
@@ -233,6 +312,10 @@ Route::middleware(['auth'])->group(function () {
 */
 Route::middleware(['auth'])->prefix('api')->name('api.')->group(function () {
     Route::get('/visitor-logs/realtime', [VisitorLogController::class, 'apiLogs'])->name('visitor-logs');
+    
+    // Add these new API routes for registration form
+    Route::get('/events/{event}/tickets', [RegistrationController::class, 'getTickets'])->name('events.tickets');
+    Route::get('/events/{event}/registration-fields', [RegistrationController::class, 'getRegistrationFields'])->name('events.registration-fields');
 });
 
 /*
@@ -242,4 +325,17 @@ Route::middleware(['auth'])->prefix('api')->name('api.')->group(function () {
 */
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
+});
+
+
+// Add this to your web.php temporarily
+Route::get('/test-events-create', function() {
+    return 'Test route works - you are ' . (auth()->check() ? 'authenticated' : 'not authenticated');
+})->middleware('auth');
+
+
+Route::prefix('registrations')->name('registrations.')->group(function () {
+    Route::get('{registration}/print-badge', [RegistrationController::class, 'printBadge'])->name('print-badge');
+    Route::get('{registration}/preview-badge', [RegistrationController::class, 'previewBadge'])->name('preview-badge');
+    Route::post('bulk-print-badges', [RegistrationController::class, 'bulkPrintBadges'])->name('bulk-print-badges');
 });

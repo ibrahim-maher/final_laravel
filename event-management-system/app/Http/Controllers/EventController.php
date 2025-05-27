@@ -23,6 +23,17 @@ class EventController extends Controller
         return view('events.index', compact('events'));
     }
 
+    /**
+     * Show the form for creating a new event.
+     * This method was missing and causing the 404 error.
+     */
+    public function create()
+    {
+        $venues = Venue::all();
+        $categories = Category::all();
+        
+        return view('events.create', compact('venues', 'categories'));
+    }
 
     public function store(Request $request)
     {

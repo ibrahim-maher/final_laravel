@@ -35,6 +35,12 @@ class Ticket extends Model
         return $this->hasMany(Registration::class, 'ticket_type_id');
     }
 
+    public function confirmedRegistrations()
+    {
+        return $this->hasMany(Registration::class, 'ticket_type_id')
+                    ->where('status', 'confirmed');
+    }
+
     public function qrCodes()
     {
         return $this->hasMany(QRCode::class, 'ticket_type_id');
@@ -48,30 +54,39 @@ class Ticket extends Model
 
     public function getAvailableSpacesAttribute()
     {
-        if (!$this->capacity) {
+        if (!$this->capacity || $this->capacity <= 0) {
             return null; // Unlimited
         }
         
-        $registeredCount = $this->registrations()->count();
+        // Only count confirmed registrations
+        $registeredCount = $this->confirmedRegistrations()->count();
         return max(0, $this->capacity - $registeredCount);
     }
 
     public function getIsAvailableAttribute()
     {
+        // First check if ticket is active
         if (!$this->is_active) {
             return false;
         }
 
-        if ($this->capacity) {
-            return $this->available_spaces > 0;
+        // If no capacity set, it's unlimited
+        if (!$this->capacity || $this->capacity <= 0) {
+            return true;
         }
 
-        return true; // Unlimited capacity
+        // Check if there are available spaces
+        return $this->available_spaces > 0;
     }
 
     public function getRegistrationCountAttribute()
     {
         return $this->registrations()->count();
+    }
+
+    public function getConfirmedRegistrationCountAttribute()
+    {
+        return $this->confirmedRegistrations()->count();
     }
 
     // Scopes
@@ -85,7 +100,8 @@ class Ticket extends Model
         return $query->where('is_active', true)
                      ->where(function($q) {
                          $q->whereNull('capacity')
-                           ->orWhereRaw('capacity > (SELECT COUNT(*) FROM registrations WHERE ticket_type_id = tickets.id)');
+                           ->orWhere('capacity', '<=', 0)
+                           ->orWhereRaw('capacity > (SELECT COUNT(*) FROM registrations WHERE ticket_type_id = tickets.id AND status = "confirmed")');
                      });
     }
 
@@ -102,11 +118,28 @@ class Ticket extends Model
 
     public function getRegistrationPercentage()
     {
-        if (!$this->capacity) {
+        if (!$this->capacity || $this->capacity <= 0) {
             return 0; // Unlimited capacity
         }
 
-        $registeredCount = $this->registration_count;
+        $registeredCount = $this->confirmed_registration_count;
         return round(($registeredCount / $this->capacity) * 100, 2);
+    }
+
+    /**
+     * Get detailed availability information for debugging
+     */
+    public function getAvailabilityInfo()
+    {
+        return [
+            'is_active' => $this->is_active,
+            'capacity' => $this->capacity,
+            'total_registrations' => $this->registration_count,
+            'confirmed_registrations' => $this->confirmed_registration_count,
+            'available_spaces' => $this->available_spaces,
+            'is_available' => $this->is_available,
+            'can_register' => $this->canRegister(),
+            'registration_percentage' => $this->getRegistrationPercentage(),
+        ];
     }
 }

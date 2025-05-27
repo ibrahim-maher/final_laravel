@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class BadgeContent extends Model
 {
@@ -30,12 +31,19 @@ class BadgeContent extends Model
         'user__first_name' => 'First Name',
         'user__last_name' => 'Last Name',
         'user__full_name' => 'Full Name',
+        'user__name' => 'Name',
+        'user__phone' => 'Phone Number',
         'user__country' => 'Country',
         'user__title' => 'Title',
         'user__company' => 'Company',
         'ticket_type__name' => 'Ticket Type',
+        'ticket_type__price' => 'Ticket Price',
         'event__name' => 'Event Name',
         'event__location' => 'Event Location',
+        'event__start_date' => 'Event Start Date',
+        'event__end_date' => 'Event End Date',
+        'registration__status' => 'Registration Status',
+        'registration__created_at' => 'Registration Date',
         'qr_code__qr_image' => 'QR Code',
     ];
 
@@ -55,38 +63,184 @@ class BadgeContent extends Model
     {
         try {
             $fieldParts = explode('__', $this->field_name);
-            $value = $registration;
+            $value = null;
 
-            // Special handling for QR code
-            if ($fieldParts[0] === 'qr_code') {
-                $value = $registration->qrCode;
-                for ($i = 1; $i < count($fieldParts); $i++) {
-                    $value = $value->{$fieldParts[$i]} ?? null;
-                }
-                return $value;
+            // Handle different field types
+            switch ($fieldParts[0]) {
+                case 'user':
+                    $value = $this->getUserFieldValue($registration, $fieldParts);
+                    break;
+                case 'event':
+                    $value = $this->getEventFieldValue($registration, $fieldParts);
+                    break;
+                case 'ticket_type':
+                    $value = $this->getTicketFieldValue($registration, $fieldParts);
+                    break;
+                case 'registration':
+                    $value = $this->getRegistrationFieldValue($registration, $fieldParts);
+                    break;
+                case 'qr_code':
+                    $value = $this->getQrCodeFieldValue($registration, $fieldParts);
+                    break;
+                default:
+                    // Try to get from registration data
+                    $value = $this->getCustomFieldValue($registration, $this->field_name);
+                    break;
             }
 
-            // Handle nested relationships
-            foreach ($fieldParts as $part) {
-                if (is_object($value)) {
-                    if ($part === 'full_name' && isset($value->first_name, $value->last_name)) {
-                        $value = trim($value->first_name . ' ' . $value->last_name);
-                    } else {
-                        $value = $value->$part ?? null;
-                    }
-                } else {
-                    break;
-                }
-                
-                if ($value === null) {
-                    break;
-                }
-            }
-
-            return $value;
+            return $value ?: $this->getFieldDisplayName();
         } catch (\Exception $e) {
-            return "Field {$this->field_name} not found";
+            \Log::error('BadgeContent field value error: ' . $e->getMessage(), [
+                'field_name' => $this->field_name,
+                'registration_id' => $registration->id ?? null
+            ]);
+            return $this->getFieldDisplayName();
         }
+    }
+
+    private function getUserFieldValue($registration, $fieldParts)
+    {
+        $user = $registration->user;
+        if (!$user) return null;
+
+        $field = $fieldParts[1] ?? null;
+        switch ($field) {
+            case 'username':
+                return $user->username ?? $user->name;
+            case 'email':
+                return $user->email;
+            case 'first_name':
+                return $this->extractFirstName($user);
+            case 'last_name':
+                return $this->extractLastName($user);
+            case 'full_name':
+            case 'name':
+                return $user->name;
+            case 'phone':
+                return $user->phone;
+            case 'country':
+                return $user->country ?? $this->getRegistrationDataValue($registration, ['Country', 'country']);
+            case 'title':
+                return $user->title ?? $this->getRegistrationDataValue($registration, ['Title', 'Job Title', 'job_title']);
+            case 'company':
+                return $user->company ?? $this->getRegistrationDataValue($registration, ['Company', 'Organization', 'company', 'organization']);
+            default:
+                return $user->$field ?? null;
+        }
+    }
+
+    private function getEventFieldValue($registration, $fieldParts)
+    {
+        $event = $registration->event;
+        if (!$event) return null;
+
+        $field = $fieldParts[1] ?? null;
+        switch ($field) {
+            case 'name':
+                return $event->name;
+            case 'location':
+                return $event->location ?? $event->venue->name ?? null;
+            case 'start_date':
+                return $event->start_date ? $event->start_date->format('M d, Y') : null;
+            case 'end_date':
+                return $event->end_date ? $event->end_date->format('M d, Y') : null;
+            default:
+                return $event->$field ?? null;
+        }
+    }
+
+    private function getTicketFieldValue($registration, $fieldParts)
+    {
+        $ticket = $registration->ticketType;
+        if (!$ticket) return null;
+
+        $field = $fieldParts[1] ?? null;
+        switch ($field) {
+            case 'name':
+                return $ticket->name;
+            case 'price':
+                return '$' . number_format($ticket->price, 2);
+            default:
+                return $ticket->$field ?? null;
+        }
+    }
+
+    private function getRegistrationFieldValue($registration, $fieldParts)
+    {
+        $field = $fieldParts[1] ?? null;
+        switch ($field) {
+            case 'status':
+                return ucfirst($registration->status);
+            case 'created_at':
+                return $registration->created_at->format('M d, Y');
+            default:
+                return $registration->$field ?? null;
+        }
+    }
+
+    private function getQrCodeFieldValue($registration, $fieldParts)
+    {
+        // QR code is handled specially in the view
+        return null;
+    }
+
+    private function getCustomFieldValue($registration, $fieldName)
+    {
+        $registrationData = $registration->registration_data ?? [];
+        
+        // Try exact match first
+        if (isset($registrationData[$fieldName])) {
+            return $registrationData[$fieldName];
+        }
+        
+        // Try common variations
+        $variations = [
+            $fieldName,
+            ucfirst($fieldName),
+            Str::title(str_replace('_', ' ', $fieldName)),
+            str_replace('_', ' ', $fieldName),
+        ];
+        
+        foreach ($variations as $variation) {
+            if (isset($registrationData[$variation])) {
+                return $registrationData[$variation];
+            }
+        }
+        
+        return null;
+    }
+
+    private function getRegistrationDataValue($registration, $possibleKeys)
+    {
+        $registrationData = $registration->registration_data ?? [];
+        
+        foreach ($possibleKeys as $key) {
+            if (isset($registrationData[$key]) && !empty($registrationData[$key])) {
+                return $registrationData[$key];
+            }
+        }
+        
+        return null;
+    }
+
+    private function extractFirstName($user)
+    {
+        if (isset($user->first_name)) {
+            return $user->first_name;
+        }
+        
+        $nameParts = explode(' ', $user->name ?? '');
+        return $nameParts[0] ?? '';
+    }
+
+    private function extractLastName($user)
+    {
+        if (isset($user->last_name)) {
+            return $user->last_name;
+        }
+        
+        $nameParts = explode(' ', $user->name ?? '');
+        return count($nameParts) > 1 ? end($nameParts) : '';
     }
 
     // Get font styles as CSS string
@@ -119,5 +273,21 @@ class BadgeContent extends Model
     public function isQrCodeField()
     {
         return $this->field_name === 'qr_code__qr_image';
+    }
+
+    // Get formatted field value for display
+    public function getFormattedFieldValue($registration)
+    {
+        $value = $this->getFieldValue($registration);
+        
+        if (is_array($value)) {
+            return implode(', ', $value);
+        }
+        
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        
+        return (string) $value;
     }
 }

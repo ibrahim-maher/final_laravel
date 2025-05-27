@@ -504,73 +504,111 @@ class VisitorLogController extends Controller
     }
 
     private function getDailyTrends($eventId, $dateFrom, $dateTo)
-    {
-        $query = VisitorLog::selectRaw('DATE(created_at) as date, action, COUNT(*) as count')
-                          ->whereBetween('created_at', [$dateFrom, $dateTo])
-                          ->groupBy('date', 'action')
-                          ->orderBy('date');
+{
+    $query = VisitorLog::selectRaw('DATE(created_at) as date, action, COUNT(*) as count')
+                      ->whereBetween('created_at', [$dateFrom, $dateTo])
+                      ->groupBy('date', 'action')
+                      ->orderBy('date');
 
-        if ($eventId) {
-            $query->whereHas('registration', function($q) use ($eventId) {
-                $q->where('event_id', $eventId);
-            });
-        }
-
-        return $query->get()->groupBy('date');
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
     }
 
-    private function getHourlyDistribution($eventId, $dateFrom, $dateTo)
-    {
-        $query = VisitorLog::selectRaw('HOUR(created_at) as hour, COUNT(*) as count')
-                          ->whereBetween('created_at', [$dateFrom, $dateTo])
-                          ->where('action', 'checkin')
-                          ->groupBy('hour')
-                          ->orderBy('hour');
-
-        if ($eventId) {
-            $query->whereHas('registration', function($q) use ($eventId) {
-                $q->where('event_id', $eventId);
-            });
-        }
-
-        $data = $query->get()->keyBy('hour');
+    $results = $query->get()->groupBy('date');
+    
+    // Transform the data to match the expected format
+    $dates = [];
+    $visits = [];
+    
+    // Create a complete date range to fill gaps
+    $period = new \DatePeriod(
+        \Carbon\Carbon::parse($dateFrom)->startOfDay(),
+        new \DateInterval('P1D'),
+        \Carbon\Carbon::parse($dateTo)->endOfDay()->addDay()
+    );
+    
+    foreach ($period as $date) {
+        $dateStr = $date->format('Y-m-d');
+        $dates[] = $date->format('M d'); // Format for display
         
-        $distribution = [];
-        for ($i = 0; $i < 24; $i++) {
-            $distribution[$i] = $data->get($i)?->count ?? 0;
-        }
-
-        return $distribution;
+        // Count total visits (checkins + checkouts) for this date
+        $dateData = $results->get($dateStr, collect());
+        $totalVisits = $dateData->sum('count');
+        $visits[] = $totalVisits;
     }
+    
+    return [
+        'dates' => $dates,
+        'visits' => $visits,
+        'raw_data' => $results // Keep the original data if needed elsewhere
+    ];
+}
+private function getHourlyDistribution($eventId, $dateFrom, $dateTo)
+{
+    $query = VisitorLog::selectRaw('HOUR(created_at) as hour, COUNT(*) as count')
+                      ->whereBetween('created_at', [$dateFrom, $dateTo])
+                      ->where('action', 'checkin')
+                      ->groupBy('hour')
+                      ->orderBy('hour');
+
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
+    }
+
+    $data = $query->get()->keyBy('hour');
+    
+    $hours = [];
+    $visits = [];
+    
+    // Generate 24 hours with proper formatting
+    for ($i = 0; $i < 24; $i++) {
+        $hours[] = sprintf('%02d:00', $i); // Format as "00:00", "01:00", etc.
+        $visits[] = $data->get($i)?->count ?? 0;
+    }
+
+    return [
+        'hours' => $hours,
+        'visits' => $visits,
+        'raw_data' => $data // Keep original data if needed
+    ];
+}
 
     private function getDurationAnalysis($eventId, $dateFrom, $dateTo)
-    {
-        $query = VisitorLog::where('action', 'checkout')
-                          ->whereNotNull('duration_minutes')
-                          ->whereBetween('created_at', [$dateFrom, $dateTo]);
+{
+    $query = VisitorLog::where('action', 'checkout')
+                      ->whereNotNull('duration_minutes')
+                      ->whereBetween('created_at', [$dateFrom, $dateTo]);
 
-        if ($eventId) {
-            $query->whereHas('registration', function($q) use ($eventId) {
-                $q->where('event_id', $eventId);
-            });
-        }
-
-        $durations = $query->pluck('duration_minutes');
-
-        return [
-            'min' => $durations->min(),
-            'max' => $durations->max(),
-            'avg' => $durations->avg(),
-            'median' => $durations->median(),
-            'ranges' => [
-                '0-30' => $durations->filter(fn($d) => $d <= 30)->count(),
-                '31-60' => $durations->filter(fn($d) => $d > 30 && $d <= 60)->count(),
-                '61-120' => $durations->filter(fn($d) => $d > 60 && $d <= 120)->count(),
-                '121+' => $durations->filter(fn($d) => $d > 120)->count(),
-            ]
-        ];
+    if ($eventId) {
+        $query->whereHas('registration', function($q) use ($eventId) {
+            $q->where('event_id', $eventId);
+        });
     }
 
+    $durations = $query->pluck('duration_minutes');
+
+    $ranges = [
+        '0-30 min' => $durations->filter(fn($d) => $d <= 30)->count(),
+        '31-60 min' => $durations->filter(fn($d) => $d > 30 && $d <= 60)->count(),
+        '61-120 min' => $durations->filter(fn($d) => $d > 60 && $d <= 120)->count(),
+        '121+ min' => $durations->filter(fn($d) => $d > 120)->count(),
+    ];
+
+    return [
+        'min' => $durations->min(),
+        'max' => $durations->max(),
+        'avg' => $durations->avg(),
+        'median' => $durations->median(),
+        'ranges' => $ranges,
+        // Add the format expected by the template
+        'labels' => array_keys($ranges),
+        'data' => array_values($ranges)
+    ];
+}
     private function getTopEvents($dateFrom, $dateTo)
     {
         return DB::table('visitor_logs')
@@ -585,25 +623,26 @@ class VisitorLogController extends Controller
                 ->get();
     }
 
-    private function getPeakTimes($eventId, $dateFrom, $dateTo)
-    {
-        $hourlyData = $this->getHourlyDistribution($eventId, $dateFrom, $dateTo);
-        
-        if (empty($hourlyData)) {
-            return [];
-        }
-
-        $max = max($hourlyData);
-        $peakHours = [];
-        
-        foreach ($hourlyData as $hour => $count) {
-            if ($count === $max && $count > 0) {
-                $peakHours[$hour] = $count;
-            }
-        }
-
-        return $peakHours;
+private function getPeakTimes($eventId, $dateFrom, $dateTo)
+{
+    $distribution = $this->getHourlyDistribution($eventId, $dateFrom, $dateTo);
+    $hourlyData = $distribution['visits']; // Get the visits array
+    
+    if (empty($hourlyData)) {
+        return [];
     }
+
+    $max = max($hourlyData);
+    $peakHours = [];
+    
+    foreach ($hourlyData as $hour => $count) {
+        if ($count === $max && $count > 0) {
+            $peakHours[$hour] = $count;
+        }
+    }
+
+    return $peakHours;
+}
 
     private function getVisitorPatterns($eventId, $dateFrom, $dateTo)
     {
@@ -717,10 +756,18 @@ class VisitorLogController extends Controller
         ];
     }
 
-    private function getTodayHourlyCheckins($eventId)
-    {
-        return $this->getHourlyDistribution($eventId, now()->startOfDay(), now()->endOfDay());
+  private function getTodayHourlyCheckins($eventId)
+{
+    $distribution = $this->getHourlyDistribution($eventId, now()->startOfDay(), now()->endOfDay());
+    
+    // If the realtime view expects just the visit counts, return those
+    // Otherwise, return the full structure
+    if (request()->expectsJson() || request()->is('*/realtime')) {
+        return $distribution['visits']; // Return just the array of counts
     }
+    
+    return $distribution; // Return full structure with hours and visits
+}
 
     private function getRegistrationTimeline($registrationId)
     {

@@ -45,7 +45,8 @@ class Event extends Model
     {
         return $this->hasMany(RegistrationField::class)->orderBy('order');
     }
-       public function getOrderedRegistrationFields()
+
+    public function getOrderedRegistrationFields()
     {
         return $this->registrationFields()->ordered()->get();
     }
@@ -55,7 +56,12 @@ class Event extends Model
         return $this->belongsToMany(User::class, 'user_event');
     }
 
-    // Boot method to handle is_active logic
+    // REMOVED: Boot method that was causing the issue
+    // The old boot method was deactivating all other events when one was set to active
+    // This prevented multiple events from being active simultaneously
+    
+    // If you need only one active event at a time, uncomment the boot method below:
+    /*
     protected static function boot()
     {
         parent::boot();
@@ -67,6 +73,7 @@ class Event extends Model
             }
         });
     }
+    */
 
     public function getStatusAttribute()
     {
@@ -78,5 +85,29 @@ class Event extends Model
         } else {
             return 'ongoing';
         }
+    }
+
+    // Helper method to check if event has available tickets
+    public function hasAvailableTickets()
+    {
+        return $this->tickets()->where('is_active', true)->exists();
+    }
+
+    // Helper method to check if event is available for registration
+    public function isAvailableForRegistration()
+    {
+        return $this->is_active && 
+               $this->start_date > now() && 
+               $this->hasAvailableTickets();
+    }
+
+    // Scope for available events
+    public function scopeAvailableForRegistration($query)
+    {
+        return $query->where('is_active', true)
+                    ->where('start_date', '>', now())
+                    ->whereHas('tickets', function($q) {
+                        $q->where('is_active', true);
+                    });
     }
 }

@@ -32,11 +32,43 @@ class RegistrationField extends Model
         'number' => 'Number',
         'phone' => 'Phone',
         'dropdown' => 'Dropdown',
-        'radio' => 'Radio',
         'checkbox' => 'Checkbox',
         'date' => 'Date',
-        'time' => 'Time',
         'url' => 'URL',
+    ];
+
+    // Default fields that should be created when a new event is created
+    const DEFAULT_FIELDS = [
+        [
+            'field_name' => 'first_name',
+            'field_type' => 'text',
+            'is_required' => true,
+        ],
+        [
+            'field_name' => 'last_name',
+            'field_type' => 'text',
+            'is_required' => true,
+        ],
+        [
+            'field_name' => 'email',
+            'field_type' => 'email',
+            'is_required' => true,
+        ],
+        [
+            'field_name' => 'phone',
+            'field_type' => 'phone',
+            'is_required' => false,
+        ],
+        [
+            'field_name' => 'company',
+            'field_type' => 'text',
+            'is_required' => false,
+        ],
+        [
+            'field_name' => 'job_title',
+            'field_type' => 'text',
+            'is_required' => false,
+        ],
     ];
 
     /**
