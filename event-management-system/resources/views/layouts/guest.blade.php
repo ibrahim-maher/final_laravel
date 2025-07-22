@@ -66,17 +66,7 @@
                 
                 <!-- Additional Links/Footer -->
                 <div class="mt-6 text-center">
-                    <div class="flex justify-center space-x-6 text-sm">
-                        <a href="#" class="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200 hover:underline">
-                            Privacy Policy
-                        </a>
-                        <a href="#" class="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200 hover:underline">
-                            Terms of Service
-                        </a>
-                        <a href="#" class="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200 hover:underline">
-                            Support
-                        </a>
-                    </div>
+                 
                     <p class="mt-4 text-xs text-gray-400 dark:text-gray-500">
                         © {{ date('Y') }} {{ config('app.name', 'Laravel') }}. All rights reserved.
                     </p>

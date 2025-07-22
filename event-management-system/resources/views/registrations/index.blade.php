@@ -138,17 +138,7 @@
                     </select>
                 </div>
 
-                <!-- Status Filter -->
-                <div>
-                    <label for="status" class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                    <select name="status" id="status" 
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors">
-                        <option value="">All Statuses</option>
-                        <option value="confirmed" {{ request('status') == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
-                        <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
-                        <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                    </select>
-                </div>
+             
 
                 <!-- Date Range -->
                 <div>
@@ -209,20 +199,8 @@
                 <span id="selected-count" class="text-lg font-semibold text-indigo-800">0 selected</span>
             </div>
             <div class="flex flex-wrap gap-3">
-                <button onclick="bulkAction('confirm')" 
-                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    Confirm
-                </button>
-                <button onclick="bulkAction('cancel')" 
-                        class="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                    Cancel
-                </button>
+              
+             
                 <button onclick="exportSelected()" 
                         class="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -291,9 +269,7 @@
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Ticket Type
                         </th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
-                            Status
-                        </th>
+                        
                         <th class="px-6 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
                             Badge Status
                         </th>
@@ -323,7 +299,6 @@
                                    data-event-date="{{ $registration->event->start_date ? $registration->event->start_date->format('M d, Y') : 'TBD' }}"
                                    data-ticket-type="{{ $registration->ticketType->name ?? 'N/A' }}"
                                    data-ticket-id="{{ $registration->ticket_type_id }}"
-                                   data-status="{{ $registration->status }}"
                                    data-can-print="{{ $canPrint ? 'true' : 'false' }}">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -366,14 +341,7 @@
                             </div>
                             @endif
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full shadow-sm
-                                {{ $registration->status === 'confirmed' ? 'bg-green-100 text-green-800 border border-green-200' : '' }}
-                                {{ $registration->status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : '' }}
-                                {{ $registration->status === 'cancelled' ? 'bg-red-100 text-red-800 border border-red-200' : '' }}">
-                                {{ ucfirst($registration->status) }}
-                            </span>
-                        </td>
+                   
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if($canPrint)
                             <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">

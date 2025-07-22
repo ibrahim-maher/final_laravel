@@ -60,5 +60,7 @@ class Kernel extends HttpKernel
         // Custom middleware
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
         'event.manager' => \App\Http\Middleware\EventManagerMiddleware::class,
+        'check.role' => \App\Http\Middleware\CheckRole::class,
+
     ];
 }
